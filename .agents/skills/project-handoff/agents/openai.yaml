@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Handoff"
+  short_description: "Capture a reliable handoff for the next coding agent"
+  default_prompt: "Use $project-handoff to leave a verified resume point for the next agent."

@@ -1,0 +1,33 @@
+# Recovery artifacts and local history
+_backup_v1/
+.context/LOCAL.md
+history/*
+!history/README.md
+
+# Secrets and local environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Python caches and build artifacts
+__pycache__/
+pycache/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+~$*

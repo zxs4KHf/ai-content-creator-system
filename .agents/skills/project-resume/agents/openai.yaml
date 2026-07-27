@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Resume"
+  short_description: "Resume work from verified repository context safely"
+  default_prompt: "Use $project-resume to restore this project and continue from its current state."

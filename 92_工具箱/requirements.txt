@@ -1,0 +1,21 @@
+# AI 自媒体工具箱依赖
+# 安装: pip install -r requirements.txt
+#
+# build_video.py 只依赖 Python 标准库 + ffmpeg, 不在这里列。
+
+# --- 生图 (gen_images.py) ---
+google-genai>=1.0.0
+
+# --- 配音 (tts_batch.py) ---
+# 用最新版: 新版有时钟偏移自动补偿, 能缓解 403 限流
+edge-tts>=7.2.8
+
+# --- 字幕对齐 (align_subtitles.py, 仅 --align 路径需要) ---
+# ⚠️ stable-ts 已于 2026-05-30 归档, 功能可用但不再修复, 必须锁版本
+# 只在配音不是 edge-tts 生成时才需要装; 走 --manifest 路径不需要
+# stable-ts==2.19.1
+# openai-whisper
+
+# --- 剪映草稿 (make_jy_draft.py, 可选) ---
+# ⚠️ 锁 0.2.7 —— v0.3.0 有破坏性变更 (add_track -> append_track)
+# pyJianYingDraft==0.2.7
