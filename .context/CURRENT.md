@@ -2,8 +2,8 @@
 
 - Last verified: 2026-07-27
 - Branch: `review/last-librarian-g1-g2`, tracking the same-named origin branch
-- Commit: branched from `b898bd9`; the recovered v2 baseline is `1fa1ab6`
-- Worktree: clean before this context update; `_backup_v1/` is retained locally and ignored by Git
+- Commit: `c99fbc6` records G1/G2 approval; this handoff context commit follows it
+- Worktree: clean after the approval and handoff commits; `_backup_v1/` is retained locally and ignored by Git
 - Current phase: G1/G2 approved; preparing character assets and pre-G3 production validation
 
 ## Working
@@ -29,6 +29,7 @@
 - Checked archive readability, recovered-file count, and absence of conflict markers.
 - Parsed all five Python files with `ast.parse` under Python 3.12.13.
 - Ran `--help` for all five Python CLIs with bytecode generation disabled.
+- Recorded explicit G1/G2 approval in the review form and passed `git diff --check`.
 - Did not install dependencies, call external APIs, generate media, log in to platforms, publish content, or run a full video pipeline.
 
 ## Next three actions
