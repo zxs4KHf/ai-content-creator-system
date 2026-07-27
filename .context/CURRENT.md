@@ -1,10 +1,10 @@
 # Current State
 
 - Last verified: 2026-07-27
-- Branch: `main`, tracking `origin/main`
-- Commit: `1fa1ab6` (recovered v2 baseline; context synchronization follows it)
-- Worktree: clean after the recovered baseline; `_backup_v1/` is retained locally and ignored by Git
-- Current phase: baseline secured in a private GitHub repository; awaiting G1/G2 human review
+- Branch: `review/last-librarian-g1-g2`, tracking the same-named origin branch
+- Commit: branched from `b898bd9`; the recovered v2 baseline is `1fa1ab6`
+- Worktree: clean before this context update; `_backup_v1/` is retained locally and ignored by Git
+- Current phase: isolated G1/G2 human review and pre-G3 validation
 
 ## Working
 
@@ -33,8 +33,8 @@
 ## Next three actions
 
 1. Have the operator review and record G1/G2 decisions in the story review form.
-2. Create a development branch for any requested content or tooling changes; keep `main` as the reviewed baseline.
-3. Create isolated fixture-based smoke tests, install ffmpeg, and verify dry-run/TTS/subtitle/video paths before G3.
+2. Apply any requested content changes on this review branch; keep `main` unchanged.
+3. Create isolated fixture-based smoke tests, install ffmpeg, and verify dry-run/TTS/subtitle/video paths before opening a pull request.
 
 ## Resume from here
 
