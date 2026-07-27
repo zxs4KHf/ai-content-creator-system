@@ -1,7 +1,7 @@
 # Project Context
 
 - Last verified: 2026-07-27
-- Verified against commit: not applicable; Git repository creation is pending
+- Verified against commit: `1fa1ab6` (recovered v2 baseline)
 - Scope: AI-assisted self-media topic research, script and storyboard production, asset generation, video assembly, publishing preparation, and data review
 - Known gaps: external generation services, ffmpeg video assembly, platform publishing integrations, and platform limits have not been verified on this Windows machine
 
