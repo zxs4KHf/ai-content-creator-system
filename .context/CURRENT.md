@@ -4,7 +4,7 @@
 - Branch: `review/last-librarian-g1-g2`, tracking the same-named origin branch
 - Commit: branched from `b898bd9`; the recovered v2 baseline is `1fa1ab6`
 - Worktree: clean before this context update; `_backup_v1/` is retained locally and ignored by Git
-- Current phase: isolated G1/G2 human review and pre-G3 validation
+- Current phase: G1/G2 approved; preparing character assets and pre-G3 production validation
 
 ## Working
 
@@ -13,12 +13,13 @@
 - [VERIFIED] All five Python tools parse under Python 3.12 and all five CLI `--help` paths exit successfully.
 - [DOCUMENTED] The v2 workflow, knowledge base, six Claude skills, templates, and first story package have been created.
 - [VERIFIED] Private repository `zxs4KHf/ai-content-creator-system` exists, with local `main` tracking `origin/main`.
+- [VERIFIED] The operator approved both G1 and G2 on 2026-07-27 with no requested content changes.
 
 ## Broken, blocked, or uncertain
 
 - [VERIFIED] `ffmpeg` and `ffprobe` are not available on the current PATH.
 - [UNKNOWN] External API, TTS, video-rendering, Jianying, and publishing paths have not been exercised end to end on this machine.
-- [DOCUMENTED] `02_制作中/2026-07-26_故事线_最后一位图书管理员/04_评审单.md` is waiting for G1 and G2 human decisions; no source images or G3 artifact exist.
+- [VERIFIED] G1/G2 approval is recorded in the story review form; no character reference art, source images, or G3 artifact exists yet.
 - [DOCUMENTED] Several platform limits in `91_知识库/K2_平台规格手册.md` remain marked for manual verification.
 
 ## Verification performed
@@ -32,10 +33,10 @@
 
 ## Next three actions
 
-1. Have the operator review and record G1/G2 decisions in the story review form.
-2. Apply any requested content changes on this review branch; keep `main` unchanged.
-3. Create isolated fixture-based smoke tests, install ffmpeg, and verify dry-run/TTS/subtitle/video paths before opening a pull request.
+1. Create the main character card and approved reference art before batch scene generation.
+2. Generate and visually review the 10 storyboard images on this branch; keep `main` unchanged.
+3. Create isolated fixture-based smoke tests, install ffmpeg, and verify TTS/subtitle/video paths before G3 and the pull request.
 
 ## Resume from here
 
-Open `02_制作中/2026-07-26_故事线_最后一位图书管理员/04_评审单.md`, record the operator's G1/G2 decision, then create a development branch before applying any requested changes.
+Create a character card from `90_模板库/T5_角色卡模板.md` under `00_账号定位/角色资产库/`, then produce reference art before generating the 10 storyboard images.
