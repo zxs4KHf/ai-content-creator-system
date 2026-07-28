@@ -375,7 +375,8 @@ def load_motion_plan(path, images):
     return plans
 
 
-def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed, motions=None):
+def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed, motions=None,
+                 frame_style="full"):
     """
     返回 (filter_complex 字符串, 最终视频标签, 每个输入的 -t 时长列表)
 
@@ -413,6 +414,30 @@ def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed, motion
             )
             prev = out
         last = "vmix"
+
+    if frame_style == "comic":
+        # Deterministic comic-explainer layout: the animated shot remains the
+        # content source, while a dark blurred duplicate fills the vertical
+        # canvas behind a white, hard-edged panel. This avoids inventing new
+        # frames and keeps the existing motion/timeline contract intact.
+        parts.append(
+            f"[{last}]split=2[comic_bg_src][comic_panel_src];"
+            f"[comic_bg_src]scale={W}:{H}:force_original_aspect_ratio=increase,"
+            f"crop={W}:{H},boxblur=18:1,eq=brightness=-0.30:saturation=0.55[comic_bg];"
+            # 864x1536 is exactly 9:16. Fit and pad instead of `increase+crop`
+            # so future shots with edge-critical details are not silently cut.
+            f"[comic_panel_src]scale=864:1536:force_original_aspect_ratio=decrease,"
+            f"pad=864:1536:(ow-iw)/2:(oh-ih)/2:color=black,"
+            f"pad=892:1564:14:14:color=white,"
+            f"drawbox=x=0:y=0:w=iw:h=ih:color=black:t=5[comic_panel];"
+            f"[comic_bg][comic_panel]overlay=94:94,"
+            f"drawbox=x=36:y=38:w=210:h=16:color=white@0.92:t=fill,"
+            f"drawbox=x=258:y=38:w=70:h=16:color=white@0.48:t=fill,"
+            f"drawbox=x=0:y=1730:w={W}:h=190:color=black@0.28:t=fill[comic]"
+        )
+        last = "comic"
+    elif frame_style != "full":
+        raise ValueError(f"未知 frame_style={frame_style}")
 
     if subtitle_path:
         esc = escape_for_filter(subtitle_path)
@@ -466,6 +491,8 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--motion-plan", default=None,
                     help="逐镜运镜 JSON；兼容 v1 mode/amount/settle 与 v2 三运动通道")
+    ap.add_argument("--frame-style", choices=("full", "comic"), default="full",
+                    help="full=全幅画面；comic=漫画解说白边画格影子版")
     ap.add_argument("--crf", type=int, default=20)
     ap.add_argument("--preset", default="medium")
     ap.add_argument("--out", default="final.mp4")
@@ -510,7 +537,8 @@ def main():
 
     sub_path = args.srt if (args.burn_subs and args.srt) else None
     fc, vlabel, in_durs = build_filter(
-        images, slots, xfade, sub_path, args.fontsdir, args.seed, motions
+        images, slots, xfade, sub_path, args.fontsdir, args.seed, motions,
+        args.frame_style,
     )
 
     # ---- 音频链 ----
@@ -551,7 +579,10 @@ def main():
     ]
 
     print("=" * 70)
-    print(f"图片 {len(images)} 张 | 音频 {audio_dur:.2f}s | 字幕 {len(cues)} 条 | 转场 {xfade:.2f}s")
+    print(
+        f"图片 {len(images)} 张 | 音频 {audio_dur:.2f}s | 字幕 {len(cues)} 条 | "
+        f"转场 {xfade:.2f}s | 画框 {args.frame_style}"
+    )
     for i, ((a, b), p, motion) in enumerate(zip(slots, images, motions)):
         motion_desc = motion.get("mode", "random")
         method = motion.get("method", "ken_burns")

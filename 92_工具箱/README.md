@@ -50,8 +50,10 @@ export GEMINI_API_KEY=你的key
 |---|---|---|
 | `gen_images.py` | ③素材 | 批量生图（Gemini/Nano Banana），定妆照 + 分镜 + **滚动锚定** |
 | `tts_batch.py` | ③素材 | 批量中文配音（edge-tts）+ **词级时间戳** + 分段拼接 |
+| `tts_minimax.py` | ③素材 | MiniMax Speech 2.8 dry-run / 预算护栏 / 系统音色与原创音色设计 |
+| `tts_qwen_local.py` | ③素材 | Qwen3-TTS 1.7B 本地只读权重 / 离线模式 / 显存与依赖前检 |
 | `align_subtitles.py` | ③剪辑 | 字幕时间轴（三条路径：manifest / stable-ts 对齐 / 机械切分） |
-| `build_video.py` | ③剪辑 | ffmpeg 合成竖版成片（Ken Burns + 转场 + 烧字幕 + 侧链闪避） |
+| `build_video.py` | ③剪辑 | ffmpeg 合成竖版成片（Ken Burns + 转场 + 烧字幕 + 侧链闪避 + 漫画画格影子版） |
 | `make_jy_draft.py` | ③剪辑 | 剪映草稿工程（仅爆款精修用） |
 | `matrix_tracker.py` | ⑤复盘 | 校验矩阵实验 CSV、样本覆盖与同平台分组中位数；不制造万能分数 |
 | `subtitle_1080x1920.ass` | ③剪辑 | 逐像素验证过的竖版字幕样式 |
@@ -159,5 +161,62 @@ python matrix_tracker.py --self-test
 ## 九、语音 A/B
 
 统一基准文本为 `90_模板库/T10_语音盲测基准.txt`，评审卡为 T9，路线与许可边界见 K10。
-当前 Edge 女声样本只作不覆盖正式旁白的内部基线；本地模型优先试 Qwen3-TTS 0.6B `Serena/Vivian`，
-权重下载和正式云 API 均在单独确认磁盘、账号和预算后执行。
+当前 Edge 女声样本只作不覆盖正式旁白的内部基线；本地模型优先试 Qwen3-TTS 1.7B `Serena/Vivian`，
+权重下载和正式云 API 均在单独确认磁盘、账号和预算后执行。原创女声与逐段导演卡见 T12。
+
+MiniMax 适配器默认只写计划，不联网、不计费：
+
+```powershell
+python tts_minimax.py synthesize `
+  --text-file ../90_模板库/T10_语音盲测基准.txt `
+  --out ../.tools/minimax_dryrun/female-yujie `
+  --voice-id female-yujie
+```
+
+正式调用需要本机进程环境变量 `MINIMAX_API_KEY`，并同时显式传入
+`--execute --confirm-billable --max-cost-cny 1`。三者缺一即拒绝调用；Key 不写计划或 manifest。
+正式调用前还会要求 `ffmpeg/ffprobe` 已在 PATH，内置价格快照未超过 30 天，并拒绝低于内置官方价的
+自定义价格。输出默认不覆盖；中途成功的同合同分段会在下次执行时复用，避免从第一段重复计费。
+确需重做必须显式加 `--overwrite`，这可能再次产生费用。
+`voices` 可查询账号可用音色，`design` 可设计不绑定真人的原创声音，两者也默认 dry-run。
+使用设计/复刻音色时还要传 `--voice-source designed|cloned`；如果尚未激活，脚本会把首次使用的
+9.9 元费用计入预算门。只有已确认付过该费用时才能加 `--voice-already-activated`。
+`cloned` 还必须传 `--confirm-voice-rights --consent-record <本地授权记录>`；参考 UP 声音不进入该路径。
+合成产物沿用现有 `segments + raw` manifest 合同，可直接交给字幕/视频链；首次真实调用会保留
+MiniMax 脱敏原始词时间响应，在字段合同实测确认前不伪造逐词时间。无词时间且单段超过 24 字时，
+字幕工具会 fail closed，要求先做 stable-ts 后对齐；机械 `--split` 只用于预览/诊断，不得用于发布。
+
+本地 Qwen 执行器同样默认 dry-run，而且只接受已经存在的本地目录：
+
+```powershell
+python tts_qwen_local.py synthesize `
+  --model-dir ../.tools/models/Qwen3-TTS-12Hz-1.7B-CustomVoice `
+  --text-file ../90_模板库/T10_语音盲测基准.txt `
+  --out ../.tools/qwen_ab/serena `
+  --speaker Serena `
+  --instruction "温暖克制，自然停顿，不用播音腔"
+```
+
+真正加载需再加 `--execute --confirm-local-run`。脚本强制四个离线环境开关，不接受 URL/远端模型 ID，
+并向加载器传 `local_files_only=True`，也不会自动安装依赖；默认要求至少 7000MiB 空闲显存。
+preflight 要求官方 1.7B CustomVoice 架构、随仓 speech tokenizer、至少 4GB safetensors，并记录内容哈希；
+默认按官方示例使用 bfloat16。执行前还要求 ffmpeg/ffprobe，已有成品默认拒绝覆盖，部分分段按完整
+请求合同安全续跑。权重与独立环境仍需单独授权后准备。
+
+## 十、漫画解说影子版
+
+方法论与评审卡见 K11/T13。`--frame-style comic` 只改变确定性画格包装，故事、旁白、时轴、
+运动计划和字幕合同保持不变，因此可以与 `full` 做单变量同片 A/B：
+
+```powershell
+python build_video.py `
+  --images "$D/素材/img/shot_*.png" `
+  --audio "$D/素材/audio/narration.mp3" `
+  --srt "$D/素材/subtitle/narration.ass" `
+  --timeline "$D/素材/image_timeline.json" `
+  --motion-plan "$D/素材/motion_plan.json" `
+  --frame-style comic `
+  --out "$D/素材/video/preview_comic_v2.mp4"
+```
+
+它不会自动把一张图伪装成多个有意义画格；需要局部证据格时，应在脚本里显式拆镜并新增素材。

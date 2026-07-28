@@ -5,16 +5,16 @@
 
 我们有口播原文, **不需要 ASR 识别, 只需要对齐**。三条路径, 按优先级:
 
-  1. manifest  —— 直接用 edge-tts 的词级时间戳。最准, 白送, 首选。
+  1. manifest  —— 优先使用供应商词级时间戳；没有词时间时安全退到分段边界。
   2. align     —— stable-ts 强制对齐。配音不是 edge-tts 生成时用。
-  3. split     —— 按字数加权机械切分。兜底, 同时可作为前两者的 sanity check
-                  (与 manifest 结果差异 >2s 说明对齐炸了)。
+  3. split     —— 按字数加权机械切分。仅供预览/诊断, 不得作为发布字幕。
+                  (与 manifest 结果差异 >2s 说明对齐可能有问题)。
 
 输出同时给 .srt 和 .ass。**推荐用 .ass**: ffmpeg 的 subtitles 滤镜处理 SRT 时
 会用 PlayResX:384/PlayResY:288 的坐标系, MarginV 直接写 380 字幕会完全消失。
 
 用法:
-    # 首选: 用 edge-tts 的 manifest
+    # 首选: 用任一兼容 TTS 适配器的 manifest
     python align_subtitles.py --manifest ../02_制作中/xxx/素材/audio/manifest.json \
         --out ../02_制作中/xxx/素材/narration
 
@@ -35,6 +35,10 @@ from pathlib import Path
 MAX_CHARS_PER_LINE = 12      # 竖版每行 ≤12 字
 MAX_LINES = 2
 CJK = re.compile(r"[一-鿿㐀-䶿]")
+
+
+class AlignmentError(RuntimeError):
+    pass
 
 # 标点的额外停顿权重(秒)
 PAUSE = {"，": .20, "、": .15, "；": .25, "：": .20, "。": .40,
@@ -86,6 +90,12 @@ def wrap(text):
        所以每行字数必须在这里保证, libass 不会帮你。
     """
     text = text.strip()
+    if len(text.replace(" ", "")) > MAX_CHARS_PER_LINE * MAX_LINES:
+        raise AlignmentError(
+            f"单条字幕超过 {MAX_LINES}×{MAX_CHARS_PER_LINE} 字显示上限；"
+            "请提供词级时间戳或先用 --align 拆分，不得截断发布字幕: "
+            f"{text}"
+        )
     if len(text) <= MAX_CHARS_PER_LINE:
         return text
 
@@ -112,9 +122,11 @@ def wrap(text):
                    and text[cut].isascii() and text[cut].isalnum()):
                 cut += 1
     lines = [text[:cut], text[cut:]] if cut < len(text) else [text]
-    if len(lines) > MAX_LINES:
-        print(f"  ⚠️ 过长, 已截断为 {MAX_LINES} 行: {text}", file=sys.stderr)
-        lines = lines[:MAX_LINES]
+    if any(len(line.replace(" ", "")) > MAX_CHARS_PER_LINE for line in lines):
+        raise AlignmentError(
+            "字幕无法在不拆开连续英文/数字的情况下满足每行 12 字上限；"
+            f"请缩小 cue 或使用词级对齐: {text}"
+        )
     return r"\N".join(lines)
 
 
@@ -127,16 +139,78 @@ def strip_punct_tail(text):
 # ---------------------------------------------------------------- 三条路径
 
 def from_manifest(path):
-    """路径 1: 用 edge-tts 的词级时间戳。最准。"""
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    raw_by_name = {str(item["name"]): item for item in data.get("raw", [])}
+    """路径 1: 用供应商词级时间戳；缺失时使用分段边界。"""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AlignmentError(f"无法读取 manifest: {exc}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("segments"), list):
+        raise AlignmentError("manifest 必须包含 segments 数组")
+    raw_items = data.get("raw", [])
+    if not isinstance(raw_items, list):
+        raise AlignmentError("manifest.raw 必须是数组")
+    try:
+        raw_by_name = {str(item["name"]): item for item in raw_items}
+    except (KeyError, TypeError) as exc:
+        raise AlignmentError("manifest.raw 条目缺少 name") from exc
     cues = []
-    for seg in data["segments"]:
+    previous_end = 0.0
+    for index, seg in enumerate(data["segments"], 1):
+        if not isinstance(seg, dict):
+            raise AlignmentError(f"manifest 段 {index} 不是对象")
+        missing = [key for key in ("name", "start_s", "end_s", "text") if key not in seg]
+        if missing:
+            raise AlignmentError(f"manifest 段 {index} 缺少字段: {', '.join(missing)}")
+        try:
+            start_s = float(seg["start_s"])
+            end_s = float(seg["end_s"])
+        except (TypeError, ValueError) as exc:
+            raise AlignmentError(f"manifest 段 {seg['name']} 时间不是数字") from exc
+        if start_s < previous_end - 0.001 or end_s <= start_s:
+            raise AlignmentError(
+                f"manifest 段 {seg['name']} 时间不单调或区间无效: {start_s}–{end_s}"
+            )
+        if not isinstance(seg["text"], str) or not seg["text"].strip():
+            raise AlignmentError(f"manifest 段 {seg['name']} 文本为空")
+        previous_end = end_s
         raw = raw_by_name.get(str(seg["name"]))
         words = raw.get("words", []) if raw else []
+        if not isinstance(words, list):
+            raise AlignmentError(f"manifest 段 {seg['name']} 的 words 不是数组")
         if not words:
+            if len(seg["text"].replace(" ", "")) > MAX_CHARS_PER_LINE * MAX_LINES:
+                raise AlignmentError(
+                    f"manifest 段 {seg['name']} 没有词级时间戳且文本超过 "
+                    f"{MAX_LINES * MAX_CHARS_PER_LINE} 字；请先用 --align 后对齐，"
+                    "不能把整段压成一条发布字幕"
+                )
             cues.append((seg["start_s"], seg["end_s"], seg["text"]))
             continue
+
+        previous_word_end = 0
+        for word_index, word in enumerate(words, 1):
+            if not isinstance(word, dict) or not all(
+                key in word for key in ("text", "start_ms", "end_ms")
+            ):
+                raise AlignmentError(
+                    f"manifest 段 {seg['name']} 的词 {word_index} 缺少 text/start_ms/end_ms"
+                )
+            try:
+                word_start = int(word["start_ms"])
+                word_end = int(word["end_ms"])
+            except (TypeError, ValueError) as exc:
+                raise AlignmentError(
+                    f"manifest 段 {seg['name']} 的词 {word_index} 时间无效"
+                ) from exc
+            if word_start < previous_word_end or word_end <= word_start:
+                raise AlignmentError(
+                    f"manifest 段 {seg['name']} 的词时间不单调: {word_start}–{word_end}"
+                )
+            if word_end > round((end_s - start_s) * 1000) + 250:
+                raise AlignmentError(
+                    f"manifest 段 {seg['name']} 的词时间超出分段边界"
+                )
+            previous_word_end = word_end
 
         # 把原文中位于相邻词之间的标点附回前一个词。
         enriched = []
@@ -214,7 +288,7 @@ def from_align(audio, sentences):
 
 
 def from_split(audio, sentences, lead_in=0.3, tail=0.3):
-    """路径 3: 按字数加权机械切分。TTS 语速恒定时误差通常可接受。"""
+    """路径 3: 按字数加权机械切分，仅供预览/诊断。"""
     total = probe_duration(audio)
 
     def weight(ch):
@@ -283,9 +357,9 @@ def write_ass(cues, path, marginv=380, ai_label=False, total=None):
 def main():
     ap = argparse.ArgumentParser(description="字幕时间轴生成")
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--manifest", help="[首选] tts_batch.py 产出的 manifest.json")
+    src.add_argument("--manifest", help="[首选] TTS 适配器产出的 manifest.json")
     src.add_argument("--align", action="store_true", help="stable-ts 强制对齐")
-    src.add_argument("--split", action="store_true", help="按字数机械切分(兜底)")
+    src.add_argument("--split", action="store_true", help="按字数机械切分(仅预览/诊断)")
     ap.add_argument("--audio", help="音频路径 (align/split 需要)")
     ap.add_argument("--text-file", help="口播文本, 一行一段 (align/split 需要)")
     ap.add_argument("--out", required=True, help="输出前缀, 会生成 .srt 和 .ass")
@@ -299,7 +373,7 @@ def main():
 
     if args.manifest:
         cues, total = from_manifest(args.manifest)
-        src_name = "manifest (edge-tts 词级时间戳)"
+        src_name = "manifest (供应商词时间戳或分段边界)"
     else:
         if not (args.audio and args.text_file):
             sys.exit("--align / --split 需要 --audio 和 --text-file")
@@ -310,9 +384,10 @@ def main():
             src_name = "stable-ts 强制对齐"
         else:
             cues, total = from_split(args.audio, sentences)
-            src_name = "机械切分"
+            src_name = "机械切分（仅预览/诊断，不得用于发布）"
 
     out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
     srt_path = out.with_suffix(".srt")
     ass_path = out.with_suffix(".ass")
     write_srt(cues, srt_path)
@@ -333,4 +408,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except AlignmentError as exc:
+        sys.exit(f"error: {exc}")
