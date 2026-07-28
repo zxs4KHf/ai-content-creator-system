@@ -51,6 +51,7 @@ export GEMINI_API_KEY=你的key
 | `gen_images.py` | ③素材 | 批量生图（Gemini/Nano Banana），定妆照 + 分镜 + **滚动锚定** |
 | `tts_batch.py` | ③素材 | 批量中文配音（edge-tts）+ **词级时间戳** + 分段拼接 |
 | `tts_minimax.py` | ③素材 | MiniMax Speech 2.8 dry-run / 预算护栏 / 系统音色与原创音色设计 |
+| `tts_dashscope.py` | ③素材 | 阿里百炼 Qwen-Audio 3.0 / CosyVoice 3.5 dry-run、预算/Workspace/续跑护栏 |
 | `tts_qwen_local.py` | ③素材 | Qwen3-TTS 1.7B 本地只读权重 / 离线模式 / 显存与依赖前检 |
 | `align_subtitles.py` | ③剪辑 | 字幕时间轴（三条路径：manifest / stable-ts 对齐 / 机械切分） |
 | `build_video.py` | ③剪辑 | ffmpeg 合成竖版成片（Ken Burns + 转场 + 烧字幕 + 侧链闪避 + 漫画画格影子版） |
@@ -202,6 +203,24 @@ python tts_qwen_local.py synthesize `
 preflight 要求官方 1.7B CustomVoice 架构、随仓 speech tokenizer、至少 4GB safetensors，并记录内容哈希；
 默认按官方示例使用 bfloat16。执行前还要求 ffmpeg/ffprobe，已有成品默认拒绝覆盖，部分分段按完整
 请求合同安全续跑。权重与独立环境仍需单独授权后准备。
+
+阿里百炼 Qwen-Audio/CosyVoice 适配器同样默认 dry-run，固定北京 Workspace 域名；Key 与 Workspace ID
+分别只读 `DASHSCOPE_API_KEY`、`DASHSCOPE_WORKSPACE_ID`：
+
+```powershell
+python tts_dashscope.py synthesize `
+  --text-file ../90_模板库/T10_语音盲测基准.txt `
+  --out ../.tools/voice_ab/dashscope_qwen_audio_plus `
+  --model qwen-audio-3.0-tts-plus `
+  --voice-id <控制台实际可用系统音色> `
+  --voice-source system `
+  --instruction "年轻成年女性，清醒亲近，语义停顿自然，不用播音腔"
+```
+
+真正调用需再加 `--execute --confirm-billable --max-cost-cny 1`，并要求 `dashscope>=1.26.4`、
+ffmpeg/ffprobe、30 天内价格快照和全新输出。CosyVoice 3.5 没有系统音色，必须先在官方
+voice-enrollment 创建原创设计音色，或使用有授权记录的克隆音色。当前适配器用非流式 MP3 做第一轮
+听感 A/B，不宣称已取得原生词时间；长字幕必须先强制对齐，后续再实现并实测流式 word events。
 
 ## 十、漫画解说影子版
 

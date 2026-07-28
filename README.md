@@ -80,8 +80,9 @@ AI自媒体/
 │       K9 内容特征学习与矩阵实验 · K10 中文语音技术路线
 │       K11 原创故事漫画解说
 ├── 92_工具箱/                 ★ 脚本即能力
-│   └── gen_images.py · tts_batch.py · tts_minimax.py · tts_qwen_local.py
-│       align_subtitles.py · build_video.py · make_jy_draft.py · matrix_tracker.py
+│   └── gen_images.py · tts_batch.py · tts_minimax.py · tts_dashscope.py
+│       tts_qwen_local.py · align_subtitles.py · build_video.py
+│       make_jy_draft.py · matrix_tracker.py
 ├── 93_运行记录/
 │   └── 决策日志.md            ★ 账号的记忆：为什么当初定了这条规则
 └── .claude/skills/            ★ 10 个 Skill：7 个生产工作流 + 3 个上下文工作流
@@ -200,9 +201,11 @@ AI自媒体/
 - [x] 建立栏目矩阵实验池、外部样本特征学习防火墙与覆盖校验工具
 - [x] 建立自然女声/中英混读盲测门并生成 4 个本机 Edge 基线
 - [x] 完成强本地/开源 TTS 与 MiniMax 参考音色复审，并加入 dry-run/预算护栏
+- [x] 加入 Qwen-Audio 3.0 / CosyVoice 3.5 DashScope dry-run、预算、Workspace 与断点续跑护栏
 - [x] 建立原创故事漫画解说 K11/T13 与 `--frame-style comic` 影子剪辑，首版不覆盖 G3
 - [ ] 在确认约 4–6GB 权重下载后试跑 Qwen3-TTS 1.7B `Serena/Vivian`；实测 OOM 才降 0.6B，不覆盖首条旁白
 - [ ] 配置 MiniMax 正式账号/Key 后先查 `Podcast_girl` 是否可用，以 ≤1 元上限完成 Speech 2.8 HD/Turbo T10 盲测
+- [ ] 配置北京地域 DashScope Key/Workspace 与原创 CosyVoice 音色后，以 ≤1 元上限完成 Qwen-Audio 3.0 / CosyVoice 3.5 同稿盲测
 - [ ] 当前 G3 通过后，把镜 4/6/10 作为独立英雄镜实验，不阻塞首条发布
 - [ ] 用一个孵化号完成 A/B/C 三栏目各 3 条 discovery 样本，再决定 controlled 实验
 - [ ] 本地部署 xiaohongshu-mcp，打通半自动发布

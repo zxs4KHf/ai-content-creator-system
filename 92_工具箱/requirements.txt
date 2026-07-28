@@ -10,6 +10,10 @@ google-genai>=1.0.0
 # 用最新版: 新版有时钟偏移自动补偿, 能缓解 403 限流
 edge-tts>=7.2.8
 
+# --- 正式低价云语音 (tts_dashscope.py, 执行路径需要；dry-run 不导入) ---
+# Qwen-Audio/CosyVoice tts_v2 的流式/非流式接口要求 1.26.4+
+dashscope>=1.26.4
+
 # --- 字幕对齐 (align_subtitles.py, 仅 --align 路径需要) ---
 # ⚠️ stable-ts 已于 2026-05-30 归档, 功能可用但不再修复, 必须锁版本
 # 只在配音不是 edge-tts 生成时才需要装; 走 --manifest 路径不需要
