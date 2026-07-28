@@ -1,0 +1,14 @@
+{
+  "default": {"mode": "in", "amount": 1.08, "settle": 0.82},
+  "shot_01.png": {"mode": "in", "amount": 1.08},
+  "shot_02.png": {"mode": "down", "amount": 1.10},
+  "shot_03.png": {"mode": "right", "amount": 1.08},
+  "shot_03b.png": {"mode": "in", "amount": 1.06},
+  "shot_04.png": {"mode": "in", "amount": 1.08},
+  "shot_05.png": {"mode": "up", "amount": 1.10},
+  "shot_06.png": {"mode": "in", "amount": 1.06},
+  "shot_07.png": {"mode": "down", "amount": 1.08},
+  "shot_08.png": {"mode": "in", "amount": 1.06},
+  "shot_09.png": {"mode": "out", "amount": 1.08},
+  "shot_10.png": {"mode": "left", "amount": 1.10}
+}

@@ -141,6 +141,18 @@ def load_text_file(path):
 
 # ---------------------------------------------------------------- 合成
 
+def probe_duration(path):
+    """用 ffprobe 读取真实媒体时长；不可用时返回 0。"""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        return float(out)
+    except (FileNotFoundError, subprocess.CalledProcessError, ValueError):
+        return 0.0
+
 async def synth_one(seg_name, text, voice, rate, pitch, volume, out_dir, sem):
     import edge_tts
     async with sem:
@@ -164,7 +176,9 @@ async def synth_one(seg_name, text, voice, rate, pitch, volume, out_dir, sem):
                         "end_ms": (chunk["offset"] + chunk["duration"]) / 10_000,
                     })
         (out_dir / f"{seg_name}.srt").write_text(submaker.get_srt(), encoding="utf-8")
-        dur = words[-1]["end_ms"] / 1000 if words else 0.0
+        dur = probe_duration(mp3)
+        if not dur:
+            dur = words[-1]["end_ms"] / 1000 if words else 0.0
         print(f"  [OK] {seg_name}  {dur:6.2f}s  {len(words):3d} 个时间戳  {voice}")
         await asyncio.sleep(GAP_SECONDS)
         return {"name": seg_name, "text": text, "file": mp3.name,
@@ -179,6 +193,47 @@ async def run(segs, voice, rate, pitch, volume, out_dir):
 
 # ---------------------------------------------------------------- 拼接
 
+def _srt_time_ms(value):
+    """把 SRT 时间戳 HH:MM:SS,mmm 转成毫秒。"""
+    hours, minutes, rest = value.split(":")
+    seconds, millis = rest.split(",")
+    return ((int(hours) * 60 + int(minutes)) * 60 + int(seconds)) * 1000 + int(millis)
+
+
+def recover_existing(segs, out_dir, voice):
+    """从已有的分段 MP3/SRT 恢复结果，供 --concat-only 使用。"""
+    results = []
+    for name, text in segs:
+        mp3 = out_dir / f"{name}.mp3"
+        srt = out_dir / f"{name}.srt"
+        if not mp3.exists() or not srt.exists():
+            sys.exit(f"缺少分段产物: {mp3.name} / {srt.name}")
+
+        words = []
+        blocks = re.split(r"\n\s*\n", srt.read_text(encoding="utf-8").strip())
+        for block in blocks:
+            lines = block.splitlines()
+            if len(lines) < 3 or " --> " not in lines[1]:
+                continue
+            start, end = lines[1].split(" --> ", 1)
+            words.append({
+                "text": "\n".join(lines[2:]),
+                "start_ms": _srt_time_ms(start),
+                "end_ms": _srt_time_ms(end),
+            })
+
+        if not words:
+            sys.exit(f"无法从 {srt.name} 恢复时间戳")
+        results.append({
+            "name": name,
+            "text": text,
+            "file": mp3.name,
+            "duration_s": probe_duration(mp3) or words[-1]["end_ms"] / 1000,
+            "voice": voice,
+            "words": words,
+        })
+    return results
+
 def make_silence(path, seconds):
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
@@ -192,6 +247,7 @@ def concat(results, out_dir, pause_ms, out_name="narration.mp3"):
     sil = out_dir / f"_silence_{pause_ms}ms.mp3"
     if pause_ms > 0 and not sil.exists():
         make_silence(sil, pause_ms / 1000.0)
+    silence_duration = probe_duration(sil) if pause_ms > 0 else 0.0
 
     listfile = out_dir / "_concat.txt"
     lines, timeline, cursor = [], [], 0.0
@@ -205,16 +261,17 @@ def concat(results, out_dir, pause_ms, out_name="narration.mp3"):
         cursor += r["duration_s"]
         if pause_ms > 0 and i < len(results) - 1:
             lines.append(f"file '{sil.name}'")
-            cursor += pause_ms / 1000.0
+            cursor += silence_duration or pause_ms / 1000.0
     listfile.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     out = out_dir / out_name
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0",
-         "-i", str(listfile), "-c", "copy", str(out)],
+         "-i", listfile.name, "-c:a", "libmp3lame", "-q:a", "2",
+         "-ar", "24000", "-ac", "1", out.name],
         check=True, cwd=str(out_dir),
     )
-    return out, timeline, cursor
+    return out, timeline, probe_duration(out) or cursor
 
 
 # ---------------------------------------------------------------- main
@@ -231,6 +288,8 @@ def main():
     ap.add_argument("--volume", default="+0%")
     ap.add_argument("--pause-ms", type=int, default=400, help="段间静音毫秒")
     ap.add_argument("--list-voices", action="store_true")
+    ap.add_argument("--concat-only", action="store_true",
+                    help="复用输出目录中已有的分段 MP3/SRT，只重建旁白与 manifest")
     args = ap.parse_args()
 
     if args.list_voices:
@@ -256,8 +315,11 @@ def main():
     print(f"共 {len(segs)} 段  音色={args.voice}  预设={args.preset} (rate={rate} pitch={pitch})")
     print(f"并发={CONCURRENCY} 间隔={GAP_SECONDS}s  (edge-tts 有 403 限流, 请勿调高)\n")
 
-    results = asyncio.run(run(segs, args.voice, rate, pitch, args.volume, out_dir))
-    results = [r for r in results if r]
+    if args.concat_only:
+        results = recover_existing(segs, out_dir, args.voice)
+    else:
+        results = asyncio.run(run(segs, args.voice, rate, pitch, args.volume, out_dir))
+        results = [r for r in results if r]
 
     out, timeline, total = concat(results, out_dir, args.pause_ms)
 

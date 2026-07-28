@@ -152,7 +152,7 @@ def main():
     ap.add_argument("--list-enums", action="store_true",
                     help="打印本机剪映实际可用的转场/动画/字体枚举名")
     ap.add_argument("--images", nargs="+")
-    ap.add_argument("--audio", help="⚠️ 必须是 WAV, MP3 会触发时长读取 bug")
+    ap.add_argument("--audio", help="[注意] 必须是 WAV, MP3 会触发时长读取 bug")
     ap.add_argument("--srt")
     ap.add_argument("--name", default="ai_draft", help="草稿名")
     ap.add_argument("--draft-folder",
@@ -182,7 +182,7 @@ def main():
     if not audio.exists():
         die(f"音频不存在: {audio}")
     if audio.suffix.lower() != ".wav":
-        print(f"⚠️ 音频不是 WAV ({audio.suffix})。已知 issue: VBR MP3 读时长会少于实际并报错。")
+        print(f"[注意] 音频不是 WAV ({audio.suffix})。已知 issue: VBR MP3 读时长会少于实际并报错。")
         print(f"   建议先转: ffmpeg -i {audio.name} -ar 44100 -ac 2 narration.wav")
 
     total = probe_duration(audio)

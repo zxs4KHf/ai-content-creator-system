@@ -18,6 +18,7 @@ import random
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 W, H = 1080, 1920
 FPS = 25
@@ -41,6 +42,65 @@ def probe_duration(path):
         "-of", "default=noprint_wrappers=1:nokey=1", path,
     ]).stdout.strip()
     return float(out)
+
+
+def slots_from_manifest(path, audio_duration):
+    """用 TTS manifest 的原始分段作为图片时轴，字幕拆细后仍保持一镜一段。"""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    segments = data.get("segments", [])
+    if not segments:
+        raise ValueError(f"manifest 没有 segments: {path}")
+    slots = []
+    for i, seg in enumerate(segments):
+        start = float(seg["start_s"])
+        end = (float(segments[i + 1]["start_s"])
+               if i + 1 < len(segments) else float(audio_duration))
+        slots.append((start, max(start + 0.05, end)))
+    return slots
+
+
+def slots_from_timeline(path, images, audio_duration):
+    """读取显式图片时轴，并按时轴顺序返回图片与时间槽。"""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    segments = data.get("segments", [])
+    if not segments:
+        raise ValueError(f"timeline 没有 segments: {path}")
+
+    by_name = {}
+    for image in images:
+        name = os.path.basename(image)
+        if name in by_name:
+            raise ValueError(f"图片文件名重复，无法按 timeline 匹配: {name}")
+        by_name[name] = image
+
+    ordered_images = []
+    slots = []
+    previous_end = None
+    for i, seg in enumerate(segments):
+        name = seg["image"]
+        if name not in by_name:
+            raise ValueError(f"timeline 引用了未提供的图片: {name}")
+        start = float(seg["start_s"])
+        end = float(seg["end_s"])
+        if start < 0 or end <= start:
+            raise ValueError(f"timeline 时间无效: {name} {start} -> {end}")
+        if previous_end is not None and abs(start - previous_end) > 0.002:
+            raise ValueError(
+                f"timeline 不连续: {segments[i - 1]['image']} 结束于 {previous_end}, "
+                f"{name} 开始于 {start}"
+            )
+        ordered_images.append(by_name[name])
+        slots.append((start, end))
+        previous_end = end
+
+    if abs(slots[0][0]) > 0.002:
+        raise ValueError(f"timeline 必须从 0 开始，实际为 {slots[0][0]}")
+    if abs(slots[-1][1] - audio_duration) > 0.05:
+        raise ValueError(
+            f"timeline 结束时间 {slots[-1][1]:.3f}s 与音频 {audio_duration:.3f}s 不一致"
+        )
+    slots[-1] = (slots[-1][0], audio_duration)
+    return ordered_images, slots
 
 
 # ---------------------------------------------------------------- SRT 解析
@@ -156,7 +216,7 @@ def group_cues_to_images(cues, n_images, audio_dur, lead_in=0.0):
 
 # ---------------------------------------------------------------- 滤镜构建
 
-def ken_burns(idx, dur_sec, seed_rng):
+def ken_burns(idx, dur_sec, seed_rng, motion=None):
     """
     单张图的 Ken Burns 滤镜串。
     抗抖动关键: crop 到 1080x1920 后先 scale 到 UPSCALE 倍, zoompan 在大图上走,
@@ -175,18 +235,25 @@ def ken_burns(idx, dur_sec, seed_rng):
             f"[v{idx}]"
         )
 
+    motion = motion or {}
     bw, bh = W * UPSCALE, H * UPSCALE
-    mode = seed_rng.choice(["in", "out", "left", "right", "up", "down"])
-    zmax = 1.18
+    valid_modes = {"in", "out", "left", "right", "up", "down"}
+    mode = motion.get("mode") or seed_rng.choice(sorted(valid_modes))
+    if mode not in valid_modes:
+        raise ValueError(f"未知运镜模式: {mode}")
+    zmax = min(1.30, max(1.01, float(motion.get("amount", 1.18))))
+    settle = min(0.98, max(0.50, float(motion.get("settle", 0.85))))
+    active_frames = max(1, int(round((frames - 1) * settle)))
+    raw = f"min(on/{active_frames},1)"
+    prog = f"({raw})*({raw})*(3-2*({raw}))"  # smoothstep 缓动，末段稳定
     if mode == "in":
-        z = f"min(zoom+{(zmax - 1.0) / frames:.8f},{zmax})"
+        z = f"1+{zmax - 1.0:.6f}*{prog}"
         x, y = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
     elif mode == "out":
-        z = f"max({zmax}-(on/{frames})*{zmax - 1.0:.6f},1.0)"
+        z = f"{zmax}-{zmax - 1.0:.6f}*{prog}"
         x, y = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
     else:
         z = f"{zmax}"
-        prog = f"(on/{max(1, frames - 1)})"
         cx, cy = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
         if mode == "left":
             x, y = f"(iw-iw/zoom)*(1-{prog})", cy
@@ -209,7 +276,21 @@ def ken_burns(idx, dur_sec, seed_rng):
     )
 
 
-def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed):
+def load_motion_plan(path, images):
+    """读取按图片文件名配置的运镜计划。"""
+    if not path:
+        return [{} for _ in images]
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    default = data.get("default", {})
+    plans = []
+    for image in images:
+        cfg = dict(default)
+        cfg.update(data.get(os.path.basename(image), {}))
+        plans.append(cfg)
+    return plans
+
+
+def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed, motions=None):
     """
     返回 (filter_complex 字符串, 最终视频标签, 每个输入的 -t 时长列表)
 
@@ -230,7 +311,8 @@ def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed):
     slot_durs = [b - a for a, b in slots]
     in_durs = [d + xfade_dur for d in slot_durs[:-1]] + [slot_durs[-1]]
 
-    parts = [ken_burns(i, in_durs[i], rng) for i in range(n)]
+    motions = motions or [{} for _ in images]
+    parts = [ken_burns(i, in_durs[i], rng, motions[i]) for i in range(n)]
 
     if n == 1:
         last = "v0"
@@ -249,10 +331,10 @@ def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed):
 
     if subtitle_path:
         esc = escape_for_filter(subtitle_path)
-        opt = f"fontsdir={escape_for_filter(fontsdir)}:" if fontsdir else ""
+        font_esc = escape_for_filter(fontsdir) if fontsdir else None
+        font_opt = f":fontsdir='{font_esc}'" if font_esc else ""
         if subtitle_path.lower().endswith(".ass"):
-            parts.append(f"[{last}]ass={esc}:{opt}[vout]".replace(":[", "["))
-            parts[-1] = f"[{last}]ass={esc}{(':' + opt.rstrip(':')) if opt else ''}[vout]"
+            parts.append(f"[{last}]ass=filename='{esc}'{font_opt}[vout]")
         else:
             # 注意: subtitles 滤镜把 SRT 转成 ASS 时用的是默认 PlayRes 384x288,
             # 所有尺寸数值必须按 288/1920 = 0.15 缩放。
@@ -267,8 +349,8 @@ def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed):
                 f"MarginV={int(380 * k)},Bold=-1,Spacing={1 * k:.4g}"
             )
             parts.append(
-                f"[{last}]subtitles={esc}"
-                f"{(':' + opt.rstrip(':')) if opt else ''}"
+                f"[{last}]subtitles=filename='{esc}'"
+                f"{font_opt}"
                 f":force_style='{style}'[vout]"
             )
         last = "vout"
@@ -288,11 +370,17 @@ def main():
     ap.add_argument("--audio", required=True, help="旁白 mp3")
     ap.add_argument("--bgm", default=None, help="背景音乐(可选)")
     ap.add_argument("--srt", default=None, help="字幕 srt/ass, 用于分段+烧录")
+    ap.add_argument("--manifest", default=None,
+                    help="TTS manifest.json；提供时按原始 segments 对齐图片，字幕只负责显示")
+    ap.add_argument("--timeline", default=None,
+                    help="显式图片时轴 JSON；用于一个旁白分段拆成多个画面时覆盖 manifest")
     ap.add_argument("--burn-subs", action="store_true", default=True)
     ap.add_argument("--no-burn-subs", dest="burn_subs", action="store_false")
     ap.add_argument("--fontsdir", default=None)
     ap.add_argument("--xfade", type=float, default=0.8, help="转场时长(秒)")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--motion-plan", default=None,
+                    help="逐镜运镜 JSON；按图片文件名配置 mode/amount/settle")
     ap.add_argument("--crf", type=int, default=20)
     ap.add_argument("--preset", default="medium")
     ap.add_argument("--out", default="final.mp4")
@@ -321,15 +409,23 @@ def main():
     if args.srt:
         cues = parse_ass(args.srt) if args.srt.lower().endswith(".ass") else parse_srt(args.srt)
 
-    slots = group_cues_to_images(cues, len(images), audio_dur)
+    if args.timeline:
+        images, slots = slots_from_timeline(args.timeline, images, audio_dur)
+    elif args.manifest:
+        slots = slots_from_manifest(args.manifest, audio_dur)
+        if len(slots) != len(images):
+            sys.exit(f"manifest 分段数 {len(slots)} != 图片数 {len(images)}")
+    else:
+        slots = group_cues_to_images(cues, len(images), audio_dur)
     images = images[:len(slots)]
+    motions = load_motion_plan(args.motion_plan, images)
 
     # 转场不能长过最短的槽
     xfade = min(args.xfade, max(0.05, min(b - a for a, b in slots) * 0.5))
 
     sub_path = args.srt if (args.burn_subs and args.srt) else None
     fc, vlabel, in_durs = build_filter(
-        images, slots, xfade, sub_path, args.fontsdir, args.seed
+        images, slots, xfade, sub_path, args.fontsdir, args.seed, motions
     )
 
     # ---- 音频链 ----
@@ -371,8 +467,9 @@ def main():
 
     print("=" * 70)
     print(f"图片 {len(images)} 张 | 音频 {audio_dur:.2f}s | 字幕 {len(cues)} 条 | 转场 {xfade:.2f}s")
-    for i, ((a, b), p) in enumerate(zip(slots, images)):
-        print(f"  #{i:02d} {a:7.2f} -> {b:7.2f}  ({b - a:5.2f}s, 输入时长 {in_durs[i]:5.2f}s)  {os.path.basename(p)}")
+    for i, ((a, b), p, motion) in enumerate(zip(slots, images, motions)):
+        motion_desc = motion.get("mode", "random")
+        print(f"  #{i:02d} {a:7.2f} -> {b:7.2f}  ({b - a:5.2f}s, 输入时长 {in_durs[i]:5.2f}s)  {os.path.basename(p)}  motion={motion_desc}")
     print("=" * 70)
 
     # 同时导出一份 concat demuxer 文件(不带转场的简易方案备用)

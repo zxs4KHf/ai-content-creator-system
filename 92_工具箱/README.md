@@ -84,17 +84,22 @@ python tts_batch.py --script "$D/02_分镜脚本.md" \
 
 # 4) 字幕时间轴
 python align_subtitles.py --manifest "$D/素材/audio/manifest.json" \
-  --out "$D/素材/narration"
+  --out "$D/素材/subtitle/narration" --ai-label
 
 # 5) 合成（先 --print-only 看分段，再实跑）
 python build_video.py \
   --images "$D/素材/img/*.png" \
   --audio  "$D/素材/audio/narration.mp3" \
-  --srt    "$D/素材/narration.ass" \
+  --srt    "$D/素材/subtitle/narration.ass" \
+  --manifest "$D/素材/audio/manifest.json" \
+  --motion-plan "$D/素材/motion_plan.json" \
   --bgm    "../90_模板库/bgm/warm_01.mp3" \
   --fontsdir fonts \
   --out    "$D/素材/final.mp4"
 ```
+
+若一个旁白段需要拆成多个画面，使用 `--timeline "$D/素材/image_timeline.json"` 取代
+`--manifest`。显式时轴会按 `segments[].image/start_s/end_s` 排序图片并检查首尾连续性。
 
 ---
 
@@ -121,7 +126,7 @@ python build_video.py \
 
 ⚠️ **0.691 这个系数依赖字体度量，换字体必须重新标定。**
 
-⚠️ **烧字幕请用 `.ass` 不要用 `.srt`**：ffmpeg 的 `subtitles` 滤镜把 SRT 转 ASS 时用
+⚠️ **发布成片生成字幕时固定加 `--ai-label`，并用 `.ass` 不要用 `.srt`**：ffmpeg 的 `subtitles` 滤镜把 SRT 转 ASS 时用
 `PlayResX:384, PlayResY:288` 的坐标系，`MarginV=380` 会把字幕直接推出画面**完全消失**。
 `build_video.py` 已经对 SRT 路径做了 ×0.15 缩放兜底，但 `.ass` 路径是所见即所得，更省心。
 

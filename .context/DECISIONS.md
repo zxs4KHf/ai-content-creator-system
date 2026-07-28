@@ -1,6 +1,6 @@
 # Decision Index
 
-- Last verified: 2026-07-27
+- Last verified: 2026-07-28
 - Authority: explicit decisions in `93_运行记录/决策日志.md` and current user confirmation
 
 | Decision | Status | Consequence | Source | Reconsider when |
@@ -14,3 +14,6 @@
 | DEC-007 | Accepted | Keep authenticated publishing and private data collection on local Windows; do not share platform cookies with cloud sessions. | `93_运行记录/决策日志.md` | An approved secure publishing service replaces local authentication. |
 | DEC-008 | Accepted | Do not add n8n, Dify, or Coze as another orchestration layer for the initial workflow. | `93_运行记录/决策日志.md` | A concrete integration need outweighs the maintenance cost. |
 | DEC-009 | Accepted | Create a new GitHub repository for this recovered project and use `main` as the integration branch. | User confirmation, 2026-07-27 | Repository ownership or collaboration needs change. |
+| DEC-010 | Accepted | Use the TTS manifest for one-image-per-segment timing; use an explicit validated image timeline when one narration segment splits into multiple shots. | `build_video.py`, first story 3A/3B split | A richer editor timeline replaces the current JSON contract. |
+| DEC-011 | Accepted | Keep the first B 站 workflow pilot free of BGM/SFX unless source and license are verified; narration quality and workflow validation take priority. | First story G3 self-check | A licensed music/SFX library is added. |
+| DEC-012 | Accepted | Generate a persistent visible `AI生成内容` label in publish-candidate ASS subtitles in addition to platform declarations. | `align_subtitles.py --ai-label`, compliance self-review | Applicable law or platform labeling mechanics change materially. |

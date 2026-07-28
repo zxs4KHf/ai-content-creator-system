@@ -1,9 +1,9 @@
 # Project Context
 
-- Last verified: 2026-07-27
+- Last verified: 2026-07-28
 - Verified against commit: `1fa1ab6` (recovered v2 baseline)
 - Scope: AI-assisted self-media topic research, script and storyboard production, asset generation, video assembly, publishing preparation, and data review
-- Known gaps: external generation services, ffmpeg video assembly, platform publishing integrations, and platform limits have not been verified on this Windows machine
+- Known gaps: B 站 authenticated upload/publishing and several live platform limits remain unverified; image generation, TTS, subtitle alignment, and ffmpeg assembly have been exercised on this Windows machine
 
 ## Purpose
 
@@ -20,7 +20,7 @@ The system has four durable layers:
 - Capabilities: `.claude/skills/zimeiti-*` describes six agent workflows; `92_工具箱/` contains Python CLIs for image generation, TTS, subtitle alignment, ffmpeg video assembly, and Jianying draft generation.
 - Flow state: a content directory moves as a unit through `01_想法库/` → `02_制作中/` → `03_待发布/` → `04_已发布/`.
 
-[VERIFIED] The five Python files under `92_工具箱/` parse successfully and expose CLI entry points. `requirements.txt` declares optional integrations such as `google-genai` and `edge-tts`; video assembly also requires external `ffmpeg` and `ffprobe` binaries.
+[VERIFIED] The five Python files under `92_工具箱/` parse successfully and expose CLI entry points. A repository-local virtual environment exercised `google-genai`, `edge-tts`, and subtitle tooling; portable `ffmpeg`/`ffprobe` 8.1 under ignored `.tools/` rendered and verified the first G3 candidate.
 
 ## Durable invariants
 
@@ -30,6 +30,7 @@ The system has four durable layers:
 - A recurring character must have approved reference art and stable identity/style locks before batch scene generation.
 - Logged-in publishing and private platform-data access run only on the local Windows machine; cloud agents must not receive platform cookies.
 - AI-generated content must be labeled on every platform.
+- Published video candidates also carry a persistent visible `AI生成内容` label generated with the ASS subtitle track.
 - Facts must not be invented. Uncertain facts remain marked for verification and must be verified or removed before publishing.
 - Publishing material should adapt one core asset across platforms rather than independently rewriting each version.
 

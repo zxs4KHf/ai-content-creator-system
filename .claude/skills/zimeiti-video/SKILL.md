@@ -31,7 +31,7 @@ metadata:
 ```bash
 cd 92_工具箱
 python align_subtitles.py --manifest "../02_制作中/xxx/素材/audio/manifest.json" \
-  --out "../02_制作中/xxx/素材/narration.srt"
+  --out "../02_制作中/xxx/素材/subtitle/narration" --ai-label
 ```
 
 ### A2. 合成
@@ -40,14 +40,18 @@ python align_subtitles.py --manifest "../02_制作中/xxx/素材/audio/manifest.
 python build_video.py \
   --images "../02_制作中/xxx/素材/img/*.png" \
   --audio  "../02_制作中/xxx/素材/audio/narration.mp3" \
-  --srt    "../02_制作中/xxx/素材/narration.srt" \
+  --srt    "../02_制作中/xxx/素材/subtitle/narration.ass" \
+  --manifest "../02_制作中/xxx/素材/audio/manifest.json" \
+  --motion-plan "../02_制作中/xxx/素材/motion_plan.json" \
   --bgm    "../90_模板库/bgm/warm_01.mp3" \
   --out    "../02_制作中/xxx/素材/final.mp4"
 ```
 
 先加 `--print-only` 看分段是否合理，再实跑。
 
-脚本做的事：每张图正好覆盖对应旁白段落 → Ken Burns 运镜（4 倍预放大抗抖动）→ xfade 转场 → 烧录字幕 → BGM 侧链闪避 + 响度归一化 → 输出 faststart MP4。
+脚本做的事：每张图正好覆盖对应旁白段落 → Ken Burns 运镜（4 倍预放大抗抖动，可读取逐镜 motion plan 并在末段减速定格）→ xfade 转场 → 烧录字幕 → BGM 侧链闪避 + 响度归一化 → 输出 faststart MP4。
+
+逐镜运动必须先对照 `91_知识库/K8_AI视频运动设计.md`：先锁目标定格，再反推动作因果链和摄影机路线。静帧预览可传 `--motion-plan 素材/motion_plan.json`，不要继续依赖随机运镜。字幕被拆成多条时，必须同时传 `--manifest 素材/audio/manifest.json`，让图片继续按原始“一镜一段”时轴对齐；若一个旁白段拆成多个画面，则改用 `--timeline 素材/image_timeline.json`。发布成片的 ASS 字幕固定使用 `--ai-label` 生成持续 AI 标识。
 
 **实测**：8 图 / 24 条字幕 / 60.03 秒音频 → 成片精确 60.00 秒。
 
