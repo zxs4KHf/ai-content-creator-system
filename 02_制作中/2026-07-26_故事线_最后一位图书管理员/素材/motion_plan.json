@@ -1,14 +1,23 @@
 {
-  "default": {"mode": "in", "amount": 1.08, "settle": 0.82},
-  "shot_01.png": {"mode": "in", "amount": 1.08},
-  "shot_02.png": {"mode": "down", "amount": 1.10},
-  "shot_03.png": {"mode": "right", "amount": 1.08},
-  "shot_03b.png": {"mode": "in", "amount": 1.06},
-  "shot_04.png": {"mode": "in", "amount": 1.08},
-  "shot_05.png": {"mode": "up", "amount": 1.10},
-  "shot_06.png": {"mode": "in", "amount": 1.06},
-  "shot_07.png": {"mode": "down", "amount": 1.08},
-  "shot_08.png": {"mode": "in", "amount": 1.06},
-  "shot_09.png": {"mode": "out", "amount": 1.08},
-  "shot_10.png": {"mode": "left", "amount": 1.10}
+  "schema_version": 2,
+  "hero_shot_budget": 3,
+  "default": {
+    "method": "ken_burns",
+    "endpoint_binding": "not_applicable",
+    "subject_motion": {"level": 0, "description": "static source image"},
+    "environment_motion": {"level": 0, "description": "not rendered in deterministic baseline"},
+    "camera_motion": {"level": 1, "mode": "in", "amount": 1.08, "ease": "smoothstep", "settle_ratio": 0.82},
+    "fallback": "static"
+  },
+  "shot_01.png": {"camera_motion": {"mode": "in", "amount": 1.08}},
+  "shot_02.png": {"camera_motion": {"mode": "down", "amount": 1.10}},
+  "shot_03.png": {"camera_motion": {"mode": "right", "amount": 1.08}},
+  "shot_03b.png": {"camera_motion": {"mode": "in", "amount": 1.06}},
+  "shot_04.png": {"hero_candidate": true, "camera_motion": {"mode": "in", "amount": 1.08}},
+  "shot_05.png": {"camera_motion": {"mode": "up", "amount": 1.10}},
+  "shot_06.png": {"hero_candidate": true, "camera_motion": {"mode": "in", "amount": 1.06}},
+  "shot_07.png": {"camera_motion": {"mode": "down", "amount": 1.08}},
+  "shot_08.png": {"camera_motion": {"mode": "in", "amount": 1.06}},
+  "shot_09.png": {"camera_motion": {"mode": "out", "amount": 1.08}},
+  "shot_10.png": {"hero_candidate": true, "camera_motion": {"mode": "left", "amount": 1.10}}
 }

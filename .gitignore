@@ -18,6 +18,7 @@ venv/
 **/素材/audio/[0-9][0-9].srt
 **/素材/audio/_*.mp3
 **/素材/audio/_concat.txt
+**/素材/audio/voice_ab/
 **/素材/video/preview*.mp4
 **/素材/video/*_concat.txt
 

@@ -223,9 +223,10 @@ def ken_burns(idx, dur_sec, seed_rng, motion=None):
     最后 s=1080x1920 输出 —— 平移步进变成亚像素, 消除逐帧整数跳变。
     """
     frames = max(2, int(round(dur_sec * FPS)))
+    motion = motion or {}
 
-    # --no-kenburns: 跳过运镜, 只做静态铺满。快 ~20 倍, 用于快速预览。
-    if UPSCALE <= 1:
+    # --no-kenburns 或 method=static: 跳过运镜, 只做静态铺满。
+    if UPSCALE <= 1 or motion.get("method") == "static":
         return (
             f"[{idx}:v]"
             f"scale={W}:{H}:force_original_aspect_ratio=increase,"
@@ -235,7 +236,6 @@ def ken_burns(idx, dur_sec, seed_rng, motion=None):
             f"[v{idx}]"
         )
 
-    motion = motion or {}
     bw, bh = W * UPSCALE, H * UPSCALE
     valid_modes = {"in", "out", "left", "right", "up", "down"}
     mode = motion.get("mode") or seed_rng.choice(sorted(valid_modes))
@@ -276,17 +276,102 @@ def ken_burns(idx, dur_sec, seed_rng, motion=None):
     )
 
 
+def _merge_motion_config(base, override):
+    """Shallow merge, while preserving nested motion-channel defaults."""
+    if not isinstance(base, dict) or not isinstance(override, dict):
+        raise ValueError("motion plan 的 default 和逐镜配置必须是对象")
+    merged = dict(base)
+    for key, value in override.items():
+        if key in {"subject_motion", "environment_motion", "camera_motion"}:
+            nested = dict(merged.get(key) or {})
+            nested.update(value or {})
+            merged[key] = nested
+        else:
+            merged[key] = value
+    return merged
+
+
+def _normalize_motion_config(cfg, image_name):
+    """Validate v2 shot metadata and flatten camera fields for Ken Burns."""
+    cfg = dict(cfg)
+    camera = dict(cfg.get("camera_motion") or {})
+    if camera:
+        cfg["mode"] = camera.get("mode", cfg.get("mode"))
+        cfg["amount"] = camera.get("amount", cfg.get("amount"))
+        cfg["settle"] = camera.get("settle_ratio", camera.get("settle", cfg.get("settle")))
+        ease = camera.get("ease", "smoothstep")
+        if ease != "smoothstep":
+            raise ValueError(f"{image_name}: build_video 当前只支持 ease=smoothstep")
+
+    method = cfg.get("method", "ken_burns")
+    if method not in {"static", "ken_burns"}:
+        raise ValueError(
+            f"{image_name}: build_video 只渲染 static/ken_burns 基线，{method} 应先离线生成视频后再进入剪辑"
+        )
+
+    endpoint = cfg.get("endpoint_binding", "not_applicable")
+    if endpoint not in {"not_applicable", "actual_last_frame", "prompt_only"}:
+        raise ValueError(f"{image_name}: 未知 endpoint_binding={endpoint}")
+    if method in {"static", "ken_burns"} and endpoint != "not_applicable":
+        raise ValueError(
+            f"{image_name}: {method} 不使用 I2V 末帧槽，endpoint_binding 必须为 not_applicable"
+        )
+    if "hero_candidate" in cfg and not isinstance(cfg["hero_candidate"], bool):
+        raise ValueError(f"{image_name}: hero_candidate 必须是 true/false")
+
+    channel_levels = {}
+    for channel in ("subject_motion", "environment_motion", "camera_motion"):
+        value = cfg.get(channel)
+        if value is None:
+            continue
+        if not isinstance(value, dict):
+            raise ValueError(f"{image_name}: {channel} 必须是对象")
+        level = value.get("level", 0)
+        if not isinstance(level, int) or isinstance(level, bool) or not 0 <= level <= 3:
+            raise ValueError(f"{image_name}: {channel}.level 必须是 0..3 的整数")
+        channel_levels[channel] = level
+    if sum(level == 3 for level in channel_levels.values()) > 1:
+        raise ValueError(f"{image_name}: 每镜最多一个强运动通道(level=3)")
+    if channel_levels.get("subject_motion") == 3 and channel_levels.get("camera_motion", 0) > 1:
+        raise ValueError(f"{image_name}: 主体强运动时摄影机必须 <=1")
+    return cfg
+
+
 def load_motion_plan(path, images):
-    """读取按图片文件名配置的运镜计划。"""
+    """读取按图片文件名配置的 v1/v2 运镜计划。"""
     if not path:
         return [{} for _ in images]
     data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("motion plan 顶层必须是对象")
+    if "schema_version" in data and data["schema_version"] != 2:
+        raise ValueError(f"不支持 motion plan schema_version={data['schema_version']}")
     default = data.get("default", {})
+    if not isinstance(default, dict):
+        raise ValueError("motion plan.default 必须是对象")
+    image_names = [os.path.basename(image) for image in images]
+    if len(set(image_names)) != len(image_names):
+        raise ValueError("motion plan 无法匹配重名图片")
+    reserved = {"schema_version", "hero_shot_budget", "default"}
+    unknown = sorted(key for key in data if key not in reserved and key not in image_names)
+    if unknown:
+        raise ValueError(f"motion plan 含未匹配的逐镜键: {', '.join(unknown)}")
     plans = []
     for image in images:
-        cfg = dict(default)
-        cfg.update(data.get(os.path.basename(image), {}))
-        plans.append(cfg)
+        image_name = os.path.basename(image)
+        shot_config = data.get(image_name, {})
+        if not isinstance(shot_config, dict):
+            raise ValueError(f"{image_name}: 逐镜配置必须是对象")
+        cfg = _merge_motion_config(default, shot_config)
+        plans.append(_normalize_motion_config(cfg, image_name))
+
+    budget = data.get("hero_shot_budget")
+    if budget is not None:
+        if not isinstance(budget, int) or isinstance(budget, bool) or budget < 0:
+            raise ValueError("hero_shot_budget 必须是非负整数")
+        candidates = sum(bool(plan.get("hero_candidate")) for plan in plans)
+        if candidates > budget:
+            raise ValueError(f"英雄镜候选 {candidates} 个，超过预算 {budget}")
     return plans
 
 
@@ -380,7 +465,7 @@ def main():
     ap.add_argument("--xfade", type=float, default=0.8, help="转场时长(秒)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--motion-plan", default=None,
-                    help="逐镜运镜 JSON；按图片文件名配置 mode/amount/settle")
+                    help="逐镜运镜 JSON；兼容 v1 mode/amount/settle 与 v2 三运动通道")
     ap.add_argument("--crf", type=int, default=20)
     ap.add_argument("--preset", default="medium")
     ap.add_argument("--out", default="final.mp4")
@@ -469,7 +554,15 @@ def main():
     print(f"图片 {len(images)} 张 | 音频 {audio_dur:.2f}s | 字幕 {len(cues)} 条 | 转场 {xfade:.2f}s")
     for i, ((a, b), p, motion) in enumerate(zip(slots, images, motions)):
         motion_desc = motion.get("mode", "random")
-        print(f"  #{i:02d} {a:7.2f} -> {b:7.2f}  ({b - a:5.2f}s, 输入时长 {in_durs[i]:5.2f}s)  {os.path.basename(p)}  motion={motion_desc}")
+        method = motion.get("method", "ken_burns")
+        levels = "/".join(
+            str((motion.get(name) or {}).get("level", 0))
+            for name in ("subject_motion", "environment_motion", "camera_motion")
+        )
+        print(
+            f"  #{i:02d} {a:7.2f} -> {b:7.2f}  ({b - a:5.2f}s, 输入时长 {in_durs[i]:5.2f}s)  "
+            f"{os.path.basename(p)}  method={method} motion={motion_desc} S/E/C={levels}"
+        )
     print("=" * 70)
 
     # 同时导出一份 concat demuxer 文件(不带转场的简易方案备用)

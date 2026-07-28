@@ -19,7 +19,8 @@ metadata:
 
 1. `02_分镜脚本.md` —— 提示词来源
 2. `91_知识库/K5_生图一致性手册.md` —— 一致性机制与模型选型
-3. `00_账号定位/角色资产库/` —— 角色是否已有定妆照
+3. `91_知识库/K10_中文语音技术路线.md` —— 涉及配音时读取
+4. `00_账号定位/角色资产库/` —— 角色是否已有定妆照
 
 ## 分支 A：故事线插画
 
@@ -91,15 +92,14 @@ cd 92_工具箱
 python tts_batch.py --script "../02_制作中/xxx/02_分镜脚本.md" --out "../02_制作中/xxx/素材/audio/"
 ```
 
-**音色选择**（微软官方用 `Novel` 标签标注了适合朗读故事的音色）：
+**edge-tts 只作内部基线/应急回退**。当前女声盲测基线：
 
 | 音色 | 性别 | 官方标签 | 适用 |
 |---|---|---|---|
-| `zh-CN-YunxiNeural` | 男 | **Novel** / Lively | 故事线首选 |
-| `zh-CN-XiaoxiaoNeural` | 女 | News, **Novel** / Warm | 通用旁白 |
-| `zh-CN-YunjianNeural` | 男 | Sports, **Novel** / Passion | 悬疑/转折 |
-| `zh-CN-XiaoyiNeural` | 女 | Cartoon, **Novel** / Lively | 年轻俏皮 |
-| `zh-CN-YunyangNeural` | 男 | News（**无 Novel**） | 播音腔，不推荐做故事 |
+| `zh-CN-XiaoxiaoNeural` | 女 | Warm | 中文温柔基线；中英混读单独验收 |
+| `zh-CN-XiaoyiNeural` | 女 | Lively | 年轻活泼基线；警惕卡通腔 |
+| `en-US-AvaMultilingualNeural` | 女 | Expressive/Caring | 中英混读基线 |
+| `en-US-EmmaMultilingualNeural` | 女 | Conversational | 中英混读基线 |
 
 **起手参数**：
 - 平静叙述 `--rate=-10% --pitch=-2Hz`
@@ -114,7 +114,9 @@ python tts_batch.py --script "../02_制作中/xxx/02_分镜脚本.md" --out "../
 2. **SSML 已被移除**，`<break>` 不可用 → 停顿靠**分段合成 + 插静音**（脚本已实现），或用中文标点（强度 `，` < `。` < `……` < `——`）
 3. 有 **403 速率限制** → 脚本已设并发 ≤2、间隔 1.5 秒。批量时不要调高
 
-**edge-tts 的独特价值**：自带**词级时间戳**（本地开源 TTS 普遍不给），字幕对齐白送，这是选它的主要理由，不只是因为免费。
+**edge-tts 的当前价值**：词级时间戳与链路已验证。但第三方无 Key 批量商用授权/SLA 不明确，不作为长期商用默认。
+
+新女声路线按 K10：先用 `T10_语音盲测基准.txt` 盲测；本地优先 Qwen3-TTS 0.6B 的 `Serena`（温暖柔和）与 `Vivian`（明亮稍锐），两者官方均支持中文/英文但建议母语发挥；VoxCPM2 用原创声音设计作为 8GB 边界候选；云端只在用户配置正式密钥与预算上限后测试 Qwen3-TTS/CosyVoice。所有新路线先产影子版，不覆盖已通过旁白。
 
 ## Step 末：产出清单
 
@@ -146,6 +148,7 @@ python tts_batch.py --script "../02_制作中/xxx/02_分镜脚本.md" --out "../
 - [ ] 画幅正确：视频 9:16、小红书 3:4、公众号头图 21:9
 - [ ] 知识线卡片走 HTML 排版，未让扩散模型写中文字
 - [ ] 配音已生成 `manifest.json`（后续字幕对齐依赖它）
+- [ ] 自然度与中英混读分别盲测；声音资产权利与模型 revision 可追溯
 - [ ] 素材目录结构符合上表
 
 ## 参考

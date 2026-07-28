@@ -41,12 +41,14 @@ from pathlib import Path
 
 # ---------------------------------------------------------------- 音色
 
-# 微软官方用 Novel 标签标注了适合朗读故事的中文音色
+# edge-tts 仅作已验证的内部基线/回退；长期生产路线见 K10。
 VOICES = {
-    "zh-CN-YunxiNeural":      "男 · Novel/Lively        · 故事线首选",
-    "zh-CN-XiaoxiaoNeural":   "女 · News,Novel/Warm     · 通用旁白",
-    "zh-CN-YunjianNeural":    "男 · Sports,Novel/Passion· 悬疑/转折",
-    "zh-CN-XiaoyiNeural":     "女 · Cartoon,Novel/Lively· 年轻俏皮",
+    "zh-CN-XiaoxiaoNeural":   "女 · Warm                 · 中文温柔基线",
+    "zh-CN-XiaoyiNeural":     "女 · Lively               · 年轻活泼基线",
+    "en-US-AvaMultilingualNeural":  "女 · Expressive/Caring · 中英混读基线",
+    "en-US-EmmaMultilingualNeural": "女 · Conversational   · 中英混读基线",
+    "zh-CN-YunxiNeural":      "男 · Novel/Lively         · 首条成片旧基线",
+    "zh-CN-YunjianNeural":    "男 · Sports,Novel/Passion · 悬疑/转折",
     "zh-CN-YunxiaNeural":     "男 · Cartoon,Novel/Cute  · 少年感",
     "zh-CN-YunyangNeural":    "男 · News (无 Novel)     · 播音腔,不推荐做故事",
     "zh-CN-liaoning-XiaobeiNeural": "女 · 东北方言/Humorous · 市井/搞笑",
@@ -277,11 +279,11 @@ def concat(results, out_dir, pause_ms, out_name="narration.mp3"):
 # ---------------------------------------------------------------- main
 
 def main():
-    ap = argparse.ArgumentParser(description="批量中文配音 (edge-tts) + 词级时间戳")
+    ap = argparse.ArgumentParser(description="edge-tts 内部基线配音 + 词级时间戳")
     ap.add_argument("--script", help="02_分镜脚本.md 路径")
     ap.add_argument("--text-file", help="纯文本, 一行一段")
     ap.add_argument("--out", help="输出目录")
-    ap.add_argument("--voice", default="zh-CN-YunxiNeural")
+    ap.add_argument("--voice", default="zh-CN-XiaoxiaoNeural")
     ap.add_argument("--preset", choices=list(PRESETS), default="平静")
     ap.add_argument("--rate", help="覆盖预设, 如 -10%%  (负值必须用等号: --rate=-10%%)")
     ap.add_argument("--pitch", help="覆盖预设, 如 -2Hz")
@@ -293,7 +295,7 @@ def main():
     args = ap.parse_args()
 
     if args.list_voices:
-        print("推荐的中文音色 (Novel 标签 = 微软官方标注适合朗读故事):\n")
+        print("内部基线音色（长期生产路线与许可边界见 K10）:\n")
         for v, d in VOICES.items():
             print(f"  {v:34s} {d}")
         print("\n完整列表: edge-tts --list-voices")

@@ -53,6 +53,7 @@ export GEMINI_API_KEY=你的key
 | `align_subtitles.py` | ③剪辑 | 字幕时间轴（三条路径：manifest / stable-ts 对齐 / 机械切分） |
 | `build_video.py` | ③剪辑 | ffmpeg 合成竖版成片（Ken Burns + 转场 + 烧字幕 + 侧链闪避） |
 | `make_jy_draft.py` | ③剪辑 | 剪映草稿工程（仅爆款精修用） |
+| `matrix_tracker.py` | ⑤复盘 | 校验矩阵实验 CSV、样本覆盖与同平台分组中位数；不制造万能分数 |
 | `subtitle_1080x1920.ass` | ③剪辑 | 逐像素验证过的竖版字幕样式 |
 
 ---
@@ -80,7 +81,7 @@ python gen_images.py --mode shots \
 
 # 3) 配音（自带词级时间戳）
 python tts_batch.py --script "$D/02_分镜脚本.md" \
-  --out "$D/素材/audio/" --voice zh-CN-YunxiNeural --preset 平静
+  --out "$D/素材/audio/" --voice zh-CN-XiaoxiaoNeural --preset 温柔
 
 # 4) 字幕时间轴
 python align_subtitles.py --manifest "$D/素材/audio/manifest.json" \
@@ -100,6 +101,10 @@ python build_video.py \
 
 若一个旁白段需要拆成多个画面，使用 `--timeline "$D/素材/image_timeline.json"` 取代
 `--manifest`。显式时轴会按 `segments[].image/start_s/end_s` 排序图片并检查首尾连续性。
+
+`motion_plan.json` 推荐 schema v2：分开 `subject_motion / environment_motion / camera_motion`，并记录
+`method / endpoint_binding / fallback / hero_candidate`。脚本仍兼容旧版 `mode/amount/settle`，但只渲染
+静帧/Ken Burns 确定性基线；I2V/V2V 必须先离线生成并通过 K8 五点/接触帧 QA。
 
 ---
 
@@ -141,3 +146,18 @@ python build_video.py \
 
 见 `发布服务部署.md`。**这些服务只在你本地 Windows 上跑**，
 云端会话一律不碰登录态。
+
+## 八、矩阵实验校验
+
+```powershell
+python matrix_tracker.py ../01_想法库/矩阵实验数据.csv --min-samples 3
+python matrix_tracker.py --self-test
+```
+
+报告按 `platform + experiment + variant + window` 给中位数和覆盖警告。它不会替人宣布胜者，也不会把不同平台压成一个分数。
+
+## 九、语音 A/B
+
+统一基准文本为 `90_模板库/T10_语音盲测基准.txt`，评审卡为 T9，路线与许可边界见 K10。
+当前 Edge 女声样本只作不覆盖正式旁白的内部基线；本地模型优先试 Qwen3-TTS 0.6B `Serena/Vivian`，
+权重下载和正式云 API 均在单独确认磁盘、账号和预算后执行。

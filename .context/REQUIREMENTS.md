@@ -17,5 +17,10 @@
 | REQ-010 | Deferred | [DOCUMENTED] | Add a weekly inbox-processing and review reminder after the repository and first production loop are stable. | `README.md` roadmap |
 | REQ-011 | Unknown | [UNKNOWN] | Validate the platform limits currently marked unverified against the live platform backends. | `91_知识库/K2_平台规格手册.md` |
 | REQ-012 | Accepted | [VERIFIED] | Maintain the project in GitHub and integrate reviewed work into `main`. | User confirmation, 2026-07-27 |
+| REQ-013 | Implemented | [VERIFIED] | Plan shots by semantic beats and `F0/K/F1`, separate subject/environment/camera motion, keep a deterministic baseline, limit hero shots, validate real endpoint binding, and use fixed fallback/QA rules. | K8, T2/T8, `build_video.py`, first story motion plan |
+| REQ-014 | Implemented | [VERIFIED] | Treat account/column growth as controlled experiments with one changed variable, per-platform observation windows, minimum sample coverage, rolling medians, safety stops, and no cross-platform universal score. | K9, T7, `matrix_tracker.py`, matrix experiment pool |
+| REQ-015 | Accepted | [DOCUMENTED] | Learn only abstract functions from external creators; do not download or copy scripts, characters, causal chains, frames, music, voices, branding, or use published stories as rewrite material. | K9/T11, user direction, copyright/platform research |
+| REQ-016 | Implemented | [VERIFIED] | Evaluate narration on separate naturalness and Chinese-English mixing gates, preserve a reproducible audio/timestamp manifest, require voice rights, and shadow-test new engines without overwriting approved audio. | K10, T9/T10, four local female Edge baselines |
+| REQ-017 | Candidate | [DOCUMENTED] | Run a local Qwen3-TTS 0.6B `Serena/Vivian` PoC on the 8GB GPU, then compare a formally authorized low-cost Qwen3-TTS/CosyVoice cloud path when account, key, and budget controls are available. | Voice research, K10 |
 
 Allowed statuses: `Implemented`, `Accepted`, `Candidate`, `Deferred`, `Rejected`, `Unknown`.
