@@ -2,8 +2,8 @@
 
 - Last verified: 2026-07-28
 - Branch: `review/last-librarian-g1-g2`, tracking `origin/review/last-librarian-g1-g2`
-- HEAD before current commit: `9cb8c92`
-- Worktree: expected production changes are present; `main` remains at `b898bd9`; local environments, tools, backups, and intermediate previews are ignored
+- Production commit: `77c4d88`; this handoff context commit follows it
+- Worktree: tracked files clean after the production commit; `main` remains at `b898bd9`; local environments, tools, backups, and intermediate previews are ignored
 - Current phase: G1/G2 approved; G3 candidate, B 站 cover, and upload copy are ready; account login and human G3/publish confirmation remain
 
 ## Working
