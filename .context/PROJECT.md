@@ -1,7 +1,7 @@
 # Project Context
 
 - Last verified: 2026-07-29
-- Verified implementation baseline before current worktree: `df7cef8` on `review/last-librarian-g1-g2`; current reviewed changes add classic-story candidates, strict timing evidence, per-shot comic hierarchy, and an offline verification entry point
+- Verified implementation baseline: `f9b56c2` on `review/last-librarian-g1-g2` (classic-story candidates, strict timing evidence, per-shot comic hierarchy, and the offline verification entry point)
 - Scope: AI-assisted self-media topic research, controlled column experiments, original story/knowledge production, storyboard and motion design, image/voice generation, video assembly, publishing preparation, and data review
 - Known external gaps: authenticated Bilibili upload/publishing, human G3/G1 choices, real paid TTS response contracts, and local large-model execution remain unverified
 
