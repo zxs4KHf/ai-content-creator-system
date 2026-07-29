@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 import urllib.error
 import urllib.request
 from datetime import date
@@ -50,6 +51,126 @@ EMOTIONS = (
 
 class MiniMaxError(RuntimeError):
     pass
+
+
+TIMING_CONTRACT_VERSION = 1
+MINIMAX_T2A_DOC_URL = (
+    "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http"
+)
+
+
+def timing_text(value: str) -> str:
+    """Normalize only characters that cannot require an audible word slot."""
+    return "".join(
+        char
+        for char in unicodedata.normalize("NFKC", value)
+        if not char.isspace() and not unicodedata.category(char).startswith("P")
+    )
+
+
+def validate_word_timings(
+    source_text: str,
+    words: Any,
+    *,
+    complete: bool,
+    audio_duration_ms: int | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Validate already-normalized word timings before publishing them.
+
+    Provider-specific fields must be mapped to ``text/start_ms/end_ms`` only
+    after that provider schema has been verified. This function deliberately
+    does not guess provider aliases.
+    """
+    if not complete:
+        return [], "provider_result_incomplete"
+    if not isinstance(source_text, str) or not timing_text(source_text):
+        return [], "source_text_empty_after_normalization"
+    if not isinstance(words, list) or not words:
+        return [], "word_timings_missing"
+    if audio_duration_ms is not None and (
+        type(audio_duration_ms) is not int or audio_duration_ms <= 0
+    ):
+        return [], "audio_duration_invalid"
+
+    normalized: list[dict[str, Any]] = []
+    previous_end = 0
+    for index, item in enumerate(words):
+        if not isinstance(item, dict):
+            return [], f"word_{index}_not_object"
+        text = item.get("text")
+        start_ms = item.get("start_ms")
+        end_ms = item.get("end_ms")
+        if not isinstance(text, str) or not timing_text(text):
+            return [], f"word_{index}_text_invalid"
+        if type(start_ms) is not int or type(end_ms) is not int:
+            return [], f"word_{index}_time_not_integer_ms"
+        if start_ms < 0 or end_ms <= start_ms:
+            return [], f"word_{index}_time_range_invalid"
+        if start_ms < previous_end:
+            return [], f"word_{index}_time_not_monotonic"
+        if audio_duration_ms is not None and end_ms > audio_duration_ms:
+            return [], f"word_{index}_exceeds_audio_duration"
+        normalized.append({
+            "text": text,
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+            "confidence": item.get("confidence"),
+        })
+        previous_end = end_ms
+
+    if timing_text("".join(item["text"] for item in normalized)) != timing_text(
+        source_text
+    ):
+        return [], "word_text_does_not_cover_source"
+    return normalized, None
+
+
+def minimax_timing_contract(result: Any, source_text: str) -> dict[str, Any]:
+    """Normalize documented MiniMax timing evidence without guessing its file schema.
+
+    The official synchronous T2A reference documents ``data.subtitle_file``
+    as a JSON download URL with millisecond timestamps, but does not document
+    the JSON item's field names. Until a real response fixture and its schema
+    are verified, the URL is evidence only and cannot populate ``words``.
+    """
+    data = dict(result.get("data") or {}) if isinstance(result, dict) else {}
+    base = dict(result.get("base_resp") or {}) if isinstance(result, dict) else {}
+    response_status = data.get("status")
+    subtitle_available = isinstance(data.get("subtitle_file"), str) and bool(
+        data.get("subtitle_file", "").strip()
+    )
+    complete = base.get("status_code") in (None, 0) and response_status == 2
+    if not complete:
+        reason = "provider_result_incomplete"
+    elif not subtitle_available:
+        reason = "provider_subtitle_missing"
+    else:
+        reason = "provider_subtitle_item_schema_not_documented"
+    words, validation_error = validate_word_timings(
+        source_text,
+        [],
+        complete=complete,
+        audio_duration_ms=(result.get("extra_info") or {}).get("audio_length")
+        if isinstance(result, dict)
+        else None,
+    )
+    return {
+        "schema_version": TIMING_CONTRACT_VERSION,
+        "status": "forced_alignment_required",
+        "mode": "listening_only",
+        "words": words,
+        "timestamps_source": "forced_alignment_required",
+        "reason": reason,
+        "validator_reason": validation_error,
+        "provider_evidence": {
+            "response_complete": complete,
+            "response_status": response_status,
+            "subtitle_file_available": subtitle_available,
+            "subtitle_requested": True,
+            "subtitle_type_requested": "word",
+            "documentation": MINIMAX_T2A_DOC_URL,
+        },
+    }
 
 
 def portable_path(path: Path) -> str:
@@ -204,17 +325,19 @@ def require_execution(args: argparse.Namespace, estimated_cost: float | None = N
 
 
 def clean_response(result: dict[str, Any]) -> dict[str, Any]:
-    """Keep the documented response metadata, never audio or unknown top-level data."""
+    """Keep documented metadata, never audio or an expiring subtitle URL."""
     cleaned = {
         key: result[key]
         for key in ("trace_id", "base_resp", "extra_info")
         if key in result
     }
-    data = {
-        key: value
-        for key, value in dict(result.get("data") or {}).items()
-        if key != "audio"
-    }
+    raw_data = dict(result.get("data") or {})
+    data = {key: raw_data[key] for key in ("status",) if key in raw_data}
+    if "subtitle_file" in raw_data:
+        data["subtitle_file_available"] = (
+            isinstance(raw_data["subtitle_file"], str)
+            and bool(raw_data["subtitle_file"].strip())
+        )
     if data:
         cleaned["data"] = data
     return cleaned
@@ -355,6 +478,12 @@ def synthesis_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[tuple
             "requires_positive_cost_cap": True,
             "api_key_environment_variable": args.api_key_env,
         },
+        "timestamp_contract": {
+            "requested": "provider word subtitles",
+            "publish_words": "fail closed until the downloaded item schema is verified",
+            "fallback": "forced alignment",
+            "documentation": MINIMAX_T2A_DOC_URL,
+        },
     }
     return plan, segments
 
@@ -425,6 +554,7 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
         path = out_dir / f"{name}.{extension}"
         path.write_bytes(audio)
         outputs.append(path)
+        timing = minimax_timing_contract(result, text)
         sidecar = {
             "name": name,
             "text": text,
@@ -436,8 +566,9 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
             ),
             "voice": args.voice_id,
             "model": args.model,
-            "words": [],
-            "timestamps_source": "provider_raw_pending_contract_validation",
+            "words": timing["words"],
+            "timestamps_source": timing["timestamps_source"],
+            "timing_contract": timing,
             "response": clean_response(result),
         }
         (out_dir / f"{name}.json").write_text(
@@ -474,7 +605,7 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
         raise MiniMaxError("Audio concatenation did not produce narration")
     manifest = {
         **plan,
-        "status": "synthesized_shadow_candidate",
+        "status": "synthesized_shadow_candidate_alignment_required",
         "generated_on": date.today().isoformat(),
         "narration": narration,
         "audio_path": narration,
@@ -493,7 +624,10 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
         "resume": {"reused_segments": reused, "new_segments": len(results) - reused},
         "segments": timeline,
         "raw": results,
-        "note": "Shadow candidate only; human blind review is required before G3 use.",
+        "note": (
+            "Listening A/B shadow only. Provider subtitle item fields are not "
+            "documented, so publish subtitles require forced alignment and human review."
+        ),
     }
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -615,6 +749,41 @@ def cmd_self_test(_: argparse.Namespace) -> None:
     check(media_extension(b"RIFFxxxx") == "wav", "WAV detection")
     check(media_extension(b"ID3xxxx") == "mp3", "MP3 detection")
     check(VOICE_DESIGN_PREVIEW_PRICE_CNY_PER_10K == 2.0, "design price floor")
+    valid_words, reason = validate_word_timings(
+        "你好，API！",
+        [
+            {"text": "你", "start_ms": 0, "end_ms": 120},
+            {"text": "好", "start_ms": 120, "end_ms": 240},
+            {"text": "API", "start_ms": 260, "end_ms": 600},
+        ],
+        complete=True,
+        audio_duration_ms=700,
+    )
+    check(reason is None and len(valid_words) == 3, "strict word timing acceptance")
+    invalid_words, reason = validate_word_timings(
+        "你好",
+        [
+            {"text": "你", "start_ms": 0, "end_ms": 200},
+            {"text": "好", "start_ms": 150, "end_ms": 300},
+        ],
+        complete=True,
+    )
+    check(not invalid_words and reason == "word_1_time_not_monotonic", "overlap rejection")
+    mock = {
+        "data": {"status": 2, "subtitle_file": "https://example.invalid/temporary"},
+        "extra_info": {"audio_length": 700},
+        "base_resp": {"status_code": 0},
+    }
+    timing = minimax_timing_contract(mock, "你好")
+    check(not timing["words"], "unverified MiniMax subtitle schema stays empty")
+    check(
+        timing["reason"] == "provider_subtitle_item_schema_not_documented",
+        "MiniMax subtitle evidence classification",
+    )
+    check(
+        "subtitle_file" not in clean_response(mock).get("data", {}),
+        "expiring subtitle URL redaction",
+    )
     print("self-test passed")
 
 

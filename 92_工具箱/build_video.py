@@ -13,6 +13,7 @@
 import argparse
 import glob
 import json
+import math
 import os
 import random
 import re
@@ -375,8 +376,252 @@ def load_motion_plan(path, images):
     return plans
 
 
+PANEL_ROLES = {"full", "detail", "impact"}
+ACTION_STATES = {"static", "initial", "development", "final"}
+KEYFRAME_ROLES = {"context", "setup", "bridge", "endpoint", "hold", "evidence"}
+
+
+def _normalize_focus(value, image_name):
+    """Validate a normalized focus rectangle without silently clipping it."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"{image_name}: focus 必须是含 x/y/w/h 的对象")
+    required = {"x", "y", "w", "h"}
+    missing = sorted(required - set(value))
+    unknown = sorted(set(value) - required)
+    if missing:
+        raise ValueError(f"{image_name}: focus 缺少字段: {', '.join(missing)}")
+    if unknown:
+        raise ValueError(f"{image_name}: focus 含未知字段: {', '.join(unknown)}")
+
+    focus = {}
+    for key in ("x", "y", "w", "h"):
+        raw = value[key]
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
+            raise ValueError(f"{image_name}: focus.{key} 必须是有限数字")
+        focus[key] = float(raw)
+    if focus["x"] < 0 or focus["y"] < 0:
+        raise ValueError(f"{image_name}: focus.x/y 不能小于 0")
+    if focus["w"] < 0.08 or focus["h"] < 0.08:
+        raise ValueError(f"{image_name}: focus.w/h 必须至少为 0.08，禁止极小区域放大")
+    if focus["x"] + focus["w"] > 1.0 + 1e-9:
+        raise ValueError(f"{image_name}: focus 横向越界 (x + w > 1)")
+    if focus["y"] + focus["h"] > 1.0 + 1e-9:
+        raise ValueError(f"{image_name}: focus 纵向越界 (y + h > 1)")
+    return focus
+
+
+def _normalize_panel_config(value, image_name):
+    if not isinstance(value, dict):
+        raise ValueError(f"{image_name}: comic layout 逐镜配置必须是对象")
+    allowed = {"panel_role", "focus", "action_state", "keyframe_role"}
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise ValueError(f"{image_name}: comic layout 含未知字段: {', '.join(unknown)}")
+    role = value.get("panel_role", "full")
+    if role not in PANEL_ROLES:
+        raise ValueError(
+            f"{image_name}: panel_role 必须是 full/detail/impact，实际为 {role!r}"
+        )
+    focus = _normalize_focus(value.get("focus"), image_name)
+    if focus is not None and role != "detail":
+        raise ValueError(f"{image_name}: focus 只用于 detail 的第二证据格")
+    action_state = value.get("action_state", "static")
+    keyframe_role = value.get("keyframe_role", "context")
+    if action_state not in ACTION_STATES:
+        raise ValueError(
+            f"{image_name}: action_state 必须是 static/initial/development/final"
+        )
+    if keyframe_role not in KEYFRAME_ROLES:
+        raise ValueError(
+            f"{image_name}: keyframe_role 必须是 context/setup/bridge/endpoint/hold/evidence"
+        )
+    expected = {
+        "initial": {"setup"},
+        "development": {"bridge"},
+        "final": {"endpoint", "hold"},
+        "static": {"context", "evidence", "hold"},
+    }
+    if keyframe_role not in expected[action_state]:
+        raise ValueError(
+            f"{image_name}: action_state={action_state} 与 keyframe_role={keyframe_role} 不对应"
+        )
+    return {
+        "panel_role": role,
+        "focus": focus,
+        "action_state": action_state,
+        "keyframe_role": keyframe_role,
+    }
+
+
+def normalize_comic_layout_plan(data, images):
+    """Return one validated comic-panel config per image.
+
+    The focus rectangle is normalized to the animated 1080x1920 shot. It is
+    never clipped into range. A detail shot keeps the full context panel and
+    may use the explicit focus only for a secondary evidence inset. Optional
+    action/keyframe metadata records endpoint-first continuity but never claims
+    that this deterministic still-image renderer generated missing motion.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("comic layout plan 顶层必须是对象")
+    if data.get("schema_version") != 1:
+        raise ValueError(
+            f"不支持 comic layout plan schema_version={data.get('schema_version')!r}，必须为 1"
+        )
+    image_names = [os.path.basename(image) for image in images]
+    if len(set(image_names)) != len(image_names):
+        raise ValueError("comic layout plan 无法匹配重名图片")
+
+    reserved = {"schema_version", "impact_shot_budget", "default", "note"}
+    unknown = sorted(key for key in data if key not in reserved and key not in image_names)
+    if unknown:
+        raise ValueError(f"comic layout plan 含未匹配的逐镜键: {', '.join(unknown)}")
+    default = data.get("default", {"panel_role": "full"})
+    default_cfg = _normalize_panel_config(default, "default")
+
+    plans = []
+    for image_name in image_names:
+        override = data.get(image_name, {})
+        if not isinstance(override, dict):
+            raise ValueError(f"{image_name}: comic layout 逐镜配置必须是对象")
+        merged = dict(default_cfg)
+        merged.update(override)
+        plans.append(_normalize_panel_config(merged, image_name))
+
+    budget = data.get("impact_shot_budget")
+    if budget is not None and (
+        not isinstance(budget, int) or isinstance(budget, bool) or budget < 0
+    ):
+        raise ValueError("impact_shot_budget 必须是非负整数")
+    impacts = sum(plan["panel_role"] == "impact" for plan in plans)
+    if impacts and budget is None:
+        raise ValueError("使用 impact 画格时必须显式声明 impact_shot_budget")
+    if budget is not None and impacts > budget:
+        raise ValueError(f"冲击格 {impacts} 个，超过预算 {budget}")
+    return plans
+
+
+def load_comic_layout_plan(path, images):
+    """Load an optional per-shot comic layout; None preserves legacy output."""
+    if not path:
+        return None
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return normalize_comic_layout_plan(data, images)
+
+
+COMIC_GEOMETRY = {
+    # (content_w, content_h, border, overlay_x, overlay_y)
+    "full": (864, 1536, 14, 94, 94),
+    "impact": (936, 1664, 12, 60, 50),
+    "detail_context": (540, 960, 12, 52, 92),
+    "detail_focus": (760, 620, 12, 244, 760),
+}
+
+
+def _comic_box(role):
+    content_w, content_h, border, x, y = COMIC_GEOMETRY[role]
+    outer_w, outer_h = content_w + border * 2, content_h + border * 2
+    if content_w % 2 or content_h % 2 or outer_w % 2 or outer_h % 2:
+        raise ValueError(f"comic {role} 画格尺寸必须为偶数，避免 ffmpeg 等比取整越界")
+    if x < 0 or y < 0 or x + outer_w > W or y + outer_h > H:
+        raise ValueError(
+            f"comic {role} 画格越界: ({x},{y}) {outer_w}x{outer_h} 不在 {W}x{H} 内"
+        )
+    return content_w, content_h, border, x, y
+
+
+def _comic_finish(input_label, output_label):
+    """Apply shared, restrained furniture after the shot-specific hierarchy."""
+    return (
+        f"[{input_label}]"
+        f"drawbox=x=36:y=38:w=210:h=16:color=white@0.92:t=fill,"
+        f"drawbox=x=258:y=38:w=70:h=16:color=white@0.48:t=fill,"
+        f"drawbox=x=0:y=1730:w={W}:h=190:color=black@0.28:t=fill"
+        f"[{output_label}]"
+    )
+
+
+def _comic_shot_filter(input_label, output_label, layout, idx):
+    """Wrap one animated shot in a full/detail/impact comic hierarchy."""
+    role = layout["panel_role"]
+    focus = layout.get("focus")
+    prefix = f"cp{idx}"
+    common_bg = (
+        f"[{prefix}_bg_src]scale={W}:{H}:force_original_aspect_ratio=decrease,"
+        f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black,"
+        f"boxblur=18:1,eq=brightness=-0.30:saturation=0.55[{prefix}_bg]"
+    )
+
+    if role in {"full", "impact"}:
+        content_w, content_h, border, x, y = _comic_box(role)
+        parts = [
+            f"[{input_label}]split=2[{prefix}_bg_src][{prefix}_main_src]",
+            common_bg,
+            (
+                f"[{prefix}_main_src]"
+                f"scale={content_w}:{content_h}:force_original_aspect_ratio=decrease,"
+                f"pad={content_w}:{content_h}:(ow-iw)/2:(oh-ih)/2:color=black,"
+                f"pad={content_w + border * 2}:{content_h + border * 2}:"
+                f"{border}:{border}:color=white,"
+                f"drawbox=x=0:y=0:w=iw:h=ih:color=black:t={'5' if role == 'full' else '7'}"
+                f"[{prefix}_main]"
+            ),
+            f"[{prefix}_bg][{prefix}_main]overlay={x}:{y}[{prefix}_composite]",
+            _comic_finish(f"{prefix}_composite", output_label),
+        ]
+        return ";".join(parts)
+
+    if role != "detail":
+        raise ValueError(f"未知 panel_role={role}")
+    context_w, context_h, context_border, context_x, context_y = _comic_box(
+        "detail_context"
+    )
+    focus_w, focus_h, focus_border, focus_x, focus_y = _comic_box("detail_focus")
+    if focus:
+        crop = (
+            f"crop=w='trunc(iw*{focus['w']:.6f}/2)*2':"
+            f"h='trunc(ih*{focus['h']:.6f}/2)*2':"
+            f"x='trunc(iw*{focus['x']:.6f}/2)*2':"
+            f"y='trunc(ih*{focus['y']:.6f}/2)*2',"
+        )
+    else:
+        crop = ""
+    parts = [
+        f"[{input_label}]split=3[{prefix}_bg_src][{prefix}_context_src][{prefix}_focus_src]",
+        common_bg,
+        (
+            f"[{prefix}_context_src]"
+            f"scale={context_w}:{context_h}:force_original_aspect_ratio=decrease,"
+            f"pad={context_w}:{context_h}:(ow-iw)/2:(oh-ih)/2:color=black,"
+            f"pad={context_w + context_border * 2}:{context_h + context_border * 2}:"
+            f"{context_border}:{context_border}:color=white,"
+            f"drawbox=x=0:y=0:w=iw:h=ih:color=black:t=5[{prefix}_context]"
+        ),
+        (
+            f"[{prefix}_focus_src]{crop}"
+            f"scale={focus_w}:{focus_h}:force_original_aspect_ratio=decrease,"
+            f"pad={focus_w}:{focus_h}:(ow-iw)/2:(oh-ih)/2:color=black,"
+            f"pad={focus_w + focus_border * 2}:{focus_h + focus_border * 2}:"
+            f"{focus_border}:{focus_border}:color=white,"
+            f"drawbox=x=0:y=0:w=iw:h=ih:color=black:t=7[{prefix}_focus]"
+        ),
+        (
+            f"[{prefix}_bg][{prefix}_context]overlay={context_x}:{context_y}"
+            f"[{prefix}_with_context]"
+        ),
+        (
+            f"[{prefix}_with_context][{prefix}_focus]overlay={focus_x}:{focus_y}"
+            f"[{prefix}_composite]"
+        ),
+        _comic_finish(f"{prefix}_composite", output_label),
+    ]
+    return ";".join(parts)
+
+
 def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed, motions=None,
-                 frame_style="full"):
+                 frame_style="full", comic_layouts=None):
     """
     返回 (filter_complex 字符串, 最终视频标签, 每个输入的 -t 时长列表)
 
@@ -399,43 +644,51 @@ def build_filter(images, slots, xfade_dur, subtitle_path, fontsdir, seed, motion
 
     motions = motions or [{} for _ in images]
     parts = [ken_burns(i, in_durs[i], rng, motions[i]) for i in range(n)]
+    stream_labels = [f"v{i}" for i in range(n)]
+    if comic_layouts is not None:
+        if frame_style != "comic":
+            raise ValueError("comic layout plan 只能与 frame_style=comic 一起使用")
+        if len(comic_layouts) != n:
+            raise ValueError(f"comic layout 数 {len(comic_layouts)} != 图片数 {n}")
+        for i, layout in enumerate(comic_layouts):
+            parts.append(_comic_shot_filter(f"v{i}", f"c{i}", layout, i))
+        stream_labels = [f"c{i}" for i in range(n)]
 
     if n == 1:
-        last = "v0"
+        last = stream_labels[0]
     else:
-        prev = "v0"
+        prev = stream_labels[0]
         for i in range(1, n):
             offset = slots[i][0]                     # == 第 i 段旁白起点
             tr = rng.choice(XFADE_TRANSITIONS)
             out = f"x{i}" if i < n - 1 else "vmix"
             parts.append(
-                f"[{prev}][v{i}]xfade=transition={tr}:"
+                f"[{prev}][{stream_labels[i]}]xfade=transition={tr}:"
                 f"duration={xfade_dur:.4f}:offset={offset:.4f}[{out}]"
             )
             prev = out
         last = "vmix"
 
     if frame_style == "comic":
-        # Deterministic comic-explainer layout: the animated shot remains the
-        # content source, while a dark blurred duplicate fills the vertical
-        # canvas behind a white, hard-edged panel. This avoids inventing new
-        # frames and keeps the existing motion/timeline contract intact.
-        parts.append(
-            f"[{last}]split=2[comic_bg_src][comic_panel_src];"
-            f"[comic_bg_src]scale={W}:{H}:force_original_aspect_ratio=increase,"
-            f"crop={W}:{H},boxblur=18:1,eq=brightness=-0.30:saturation=0.55[comic_bg];"
-            # 864x1536 is exactly 9:16. Fit and pad instead of `increase+crop`
-            # so future shots with edge-critical details are not silently cut.
-            f"[comic_panel_src]scale=864:1536:force_original_aspect_ratio=decrease,"
-            f"pad=864:1536:(ow-iw)/2:(oh-ih)/2:color=black,"
-            f"pad=892:1564:14:14:color=white,"
-            f"drawbox=x=0:y=0:w=iw:h=ih:color=black:t=5[comic_panel];"
-            f"[comic_bg][comic_panel]overlay=94:94,"
-            f"drawbox=x=36:y=38:w=210:h=16:color=white@0.92:t=fill,"
-            f"drawbox=x=258:y=38:w=70:h=16:color=white@0.48:t=fill,"
-            f"drawbox=x=0:y=1730:w={W}:h=190:color=black@0.28:t=fill[comic]"
-        )
-        last = "comic"
+        if comic_layouts is None:
+            # Legacy layout remains byte-for-byte stable when no explicit
+            # comic layout plan is supplied.
+            parts.append(
+                f"[{last}]split=2[comic_bg_src][comic_panel_src];"
+                f"[comic_bg_src]scale={W}:{H}:force_original_aspect_ratio=increase,"
+                f"crop={W}:{H},boxblur=18:1,eq=brightness=-0.30:saturation=0.55[comic_bg];"
+                # 864x1536 is exactly 9:16. Fit and pad instead of `increase+crop`
+                # so future shots with edge-critical details are not silently cut.
+                f"[comic_panel_src]scale=864:1536:force_original_aspect_ratio=decrease,"
+                f"pad=864:1536:(ow-iw)/2:(oh-ih)/2:color=black,"
+                f"pad=892:1564:14:14:color=white,"
+                f"drawbox=x=0:y=0:w=iw:h=ih:color=black:t=5[comic_panel];"
+                f"[comic_bg][comic_panel]overlay=94:94,"
+                f"drawbox=x=36:y=38:w=210:h=16:color=white@0.92:t=fill,"
+                f"drawbox=x=258:y=38:w=70:h=16:color=white@0.48:t=fill,"
+                f"drawbox=x=0:y=1730:w={W}:h=190:color=black@0.28:t=fill[comic]"
+            )
+            last = "comic"
     elif frame_style != "full":
         raise ValueError(f"未知 frame_style={frame_style}")
 
@@ -472,12 +725,134 @@ def escape_for_filter(p):
     return p.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
 
 
+def _expect_value_error(callable_, contains):
+    try:
+        callable_()
+    except ValueError as exc:
+        if contains not in str(exc):
+            raise AssertionError(f"错误信息应包含 {contains!r}，实际为 {exc!r}") from exc
+        return
+    raise AssertionError(f"预期 ValueError({contains!r})，但调用成功")
+
+
+def self_test():
+    images = ["shot_a.png", "shot_b.png", "shot_c.png"]
+    valid = {
+        "schema_version": 1,
+        "impact_shot_budget": 1,
+        "default": {"panel_role": "full"},
+        "shot_b.png": {
+            "panel_role": "detail",
+            "focus": {"x": 0.2, "y": 0.3, "w": 0.5, "h": 0.4},
+        },
+        "shot_c.png": {"panel_role": "impact"},
+    }
+    plans = normalize_comic_layout_plan(valid, images)
+    assert [plan["panel_role"] for plan in plans] == ["full", "detail", "impact"]
+    assert plans[1]["focus"] == {"x": 0.2, "y": 0.3, "w": 0.5, "h": 0.4}
+    for role in COMIC_GEOMETRY:
+        _comic_box(role)
+    fw, fh, fb, _, fy = _comic_box("detail_focus")
+    assert fy + fh + fb * 2 <= 1500  # keep the evidence inset above subtitle risk zone
+
+    slots = [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)]
+    motions = [{"method": "static"} for _ in images]
+    explicit_filter, label, durations = build_filter(
+        images, slots, 0.2, None, None, 42, motions, "comic", plans
+    )
+    assert label == "vmix"
+    assert durations == [1.2, 1.2, 1.0]
+    assert "[cp0_main_src]scale=864:1536:force_original_aspect_ratio=decrease" in explicit_filter
+    assert "[cp1_context_src]scale=540:960:force_original_aspect_ratio=decrease" in explicit_filter
+    assert "[cp1_focus_src]crop=w='trunc(iw*0.500000/2)*2'" in explicit_filter
+    assert "[cp2_main_src]scale=936:1664:force_original_aspect_ratio=decrease" in explicit_filter
+    assert "[c0][c1]xfade=" in explicit_filter
+
+    legacy_filter, legacy_label, _ = build_filter(
+        ["shot_a.png"], [(0.0, 1.0)], 0.2, None, None, 42,
+        [{"method": "static"}], "comic", None,
+    )
+    assert legacy_label == "comic"
+    assert "[comic_bg][comic_panel]overlay=94:94" in legacy_filter
+    assert "[cp0_" not in legacy_filter
+
+    _expect_value_error(
+        lambda: normalize_comic_layout_plan(
+            {"schema_version": 1, "shot_a.png": {"panel_role": "hero"}}, images
+        ),
+        "panel_role",
+    )
+    _expect_value_error(
+        lambda: normalize_comic_layout_plan(
+            {
+                "schema_version": 1,
+                "shot_a.png": {
+                    "panel_role": "detail",
+                    "focus": {"x": 0.8, "y": 0.2, "w": 0.3, "h": 0.3},
+                },
+            },
+            images,
+        ),
+        "横向越界",
+    )
+    _expect_value_error(
+        lambda: normalize_comic_layout_plan(
+            {
+                "schema_version": 1,
+                "shot_a.png": {
+                    "panel_role": "full",
+                    "focus": {"x": 0.1, "y": 0.1, "w": 0.3, "h": 0.3},
+                },
+            },
+            images,
+        ),
+        "只用于 detail",
+    )
+    _expect_value_error(
+        lambda: normalize_comic_layout_plan(
+            {
+                "schema_version": 1,
+                "impact_shot_budget": 0,
+                "shot_a.png": {"panel_role": "impact"},
+            },
+            images,
+        ),
+        "超过预算",
+    )
+    _expect_value_error(
+        lambda: normalize_comic_layout_plan(
+            {"schema_version": 1, "shot_a.png": {"panel_role": "impact"}}, images
+        ),
+        "必须显式声明",
+    )
+    _expect_value_error(
+        lambda: normalize_comic_layout_plan(
+            {"schema_version": 1, "missing.png": {"panel_role": "full"}}, images
+        ),
+        "未匹配",
+    )
+    _expect_value_error(
+        lambda: normalize_comic_layout_plan(
+            {
+                "schema_version": 1,
+                "shot_a.png": {
+                    "action_state": "initial",
+                    "keyframe_role": "endpoint",
+                },
+            },
+            images,
+        ),
+        "不对应",
+    )
+    print("build_video self-test: OK")
+
+
 # ---------------------------------------------------------------- 主流程
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--images", nargs="+", required=True, help="图片列表(支持通配符)")
-    ap.add_argument("--audio", required=True, help="旁白 mp3")
+    ap.add_argument("--images", nargs="+", help="图片列表(支持通配符)")
+    ap.add_argument("--audio", help="旁白 mp3")
     ap.add_argument("--bgm", default=None, help="背景音乐(可选)")
     ap.add_argument("--srt", default=None, help="字幕 srt/ass, 用于分段+烧录")
     ap.add_argument("--manifest", default=None,
@@ -493,6 +868,8 @@ def main():
                     help="逐镜运镜 JSON；兼容 v1 mode/amount/settle 与 v2 三运动通道")
     ap.add_argument("--frame-style", choices=("full", "comic"), default="full",
                     help="full=全幅画面；comic=漫画解说白边画格影子版")
+    ap.add_argument("--comic-layout-plan", default=None,
+                    help="comic 逐镜画格 JSON；不提供时保持旧版统一全格布局")
     ap.add_argument("--crf", type=int, default=20)
     ap.add_argument("--preset", default="medium")
     ap.add_argument("--out", default="final.mp4")
@@ -502,7 +879,16 @@ def main():
                          "8 比 4 慢 3.5 倍收益极小, 不要用")
     ap.add_argument("--no-kenburns", action="store_true",
                     help="关闭运镜, 等价于 --upscale 1。快约 20 倍, 用于快速预览")
+    ap.add_argument("--self-test", action="store_true", help="运行漫画布局合同自测试后退出")
     args = ap.parse_args()
+
+    if args.self_test:
+        self_test()
+        return
+    if not args.images or not args.audio:
+        ap.error("--images 和 --audio 是必填项（--self-test 除外）")
+    if args.comic_layout_plan and args.frame_style != "comic":
+        ap.error("--comic-layout-plan 只能与 --frame-style comic 一起使用")
 
     global UPSCALE
     UPSCALE = 1 if args.no_kenburns else max(1, args.upscale)
@@ -531,6 +917,7 @@ def main():
         slots = group_cues_to_images(cues, len(images), audio_dur)
     images = images[:len(slots)]
     motions = load_motion_plan(args.motion_plan, images)
+    comic_layouts = load_comic_layout_plan(args.comic_layout_plan, images)
 
     # 转场不能长过最短的槽
     xfade = min(args.xfade, max(0.05, min(b - a for a, b in slots) * 0.5))
@@ -538,7 +925,7 @@ def main():
     sub_path = args.srt if (args.burn_subs and args.srt) else None
     fc, vlabel, in_durs = build_filter(
         images, slots, xfade, sub_path, args.fontsdir, args.seed, motions,
-        args.frame_style,
+        args.frame_style, comic_layouts,
     )
 
     # ---- 音频链 ----
@@ -590,9 +977,14 @@ def main():
             str((motion.get(name) or {}).get("level", 0))
             for name in ("subject_motion", "environment_motion", "camera_motion")
         )
+        panel_desc = (
+            f" panel={comic_layouts[i]['panel_role']}"
+            f" action={comic_layouts[i]['action_state']}/{comic_layouts[i]['keyframe_role']}"
+            if comic_layouts is not None else ""
+        )
         print(
             f"  #{i:02d} {a:7.2f} -> {b:7.2f}  ({b - a:5.2f}s, 输入时长 {in_durs[i]:5.2f}s)  "
-            f"{os.path.basename(p)}  method={method} motion={motion_desc} S/E/C={levels}"
+            f"{os.path.basename(p)}  method={method} motion={motion_desc} S/E/C={levels}{panel_desc}"
         )
     print("=" * 70)
 

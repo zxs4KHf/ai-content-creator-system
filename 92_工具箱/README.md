@@ -3,6 +3,17 @@
 > 脚本即能力。AI 调这些脚本，而不是每次重写代码。
 > 所有脚本只依赖 Python 标准库 + 少量第三方包 + ffmpeg。
 
+## 零、先跑离线验证
+
+```powershell
+py -3 verify_workflows.py
+```
+
+这个入口会统一检查 9 个生产 CLI 的语法与 `--help`、四个内建
+`self-test`，以及首条故事的真实词时间字幕、11 镜时轴、运镜和
+`full/comic` 滤镜合同。它不读 API Key、不联网、不调用付费接口、不改写
+生产素材。只做快速 CLI 巡检时使用 `py -3 verify_workflows.py --quick`。
+
 ---
 
 ## 一、一次性安装
@@ -57,6 +68,7 @@ export GEMINI_API_KEY=你的key
 | `build_video.py` | ③剪辑 | ffmpeg 合成竖版成片（Ken Burns + 转场 + 烧字幕 + 侧链闪避 + 漫画画格影子版） |
 | `make_jy_draft.py` | ③剪辑 | 剪映草稿工程（仅爆款精修用） |
 | `matrix_tracker.py` | ⑤复盘 | 校验矩阵实验 CSV、样本覆盖与同平台分组中位数；不制造万能分数 |
+| `verify_workflows.py` | 全流程 | 离线运行仓库级语法、自测与首条故事合同检查 |
 | `subtitle_1080x1920.ass` | ③剪辑 | 逐像素验证过的竖版字幕样式 |
 
 ---
@@ -235,7 +247,14 @@ python build_video.py `
   --timeline "$D/素材/image_timeline.json" `
   --motion-plan "$D/素材/motion_plan.json" `
   --frame-style comic `
-  --out "$D/素材/video/preview_comic_v2.mp4"
+  --comic-layout-plan "$D/素材/comic_layout_plan.json" `
+  --out "$D/素材/video/preview_comic_v3_hierarchy.mp4"
 ```
 
-它不会自动把一张图伪装成多个有意义画格；需要局部证据格时，应在脚本里显式拆镜并新增素材。
+不传 `--comic-layout-plan` 时保持旧版统一全格行为。传入后可按镜声明
+`full/detail/impact`；`detail` 仍保留完整上下文格，只有显式的归一化
+`focus` 才生成第二证据格，`impact` 则必须声明预算。合同字段、终点倒推和
+回退规则见 K11/T13，可用 `py -3 build_video.py --self-test` 离线验证。
+
+它不会自动把一张图伪装成新动作或语义不同的多镜；需要真实中帧或新证据时，
+仍应在分镜中显式新增素材并通过连续性 QA。

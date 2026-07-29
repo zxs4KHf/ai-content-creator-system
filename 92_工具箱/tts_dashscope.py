@@ -7,10 +7,11 @@ local guards pass. It targets the official Beijing workspace WebSocket endpoint
 through ``dashscope.audio.tts_v2.SpeechSynthesizer``. Keys and Workspace IDs are
 read from environment variables and are never written to output files.
 
-Non-streaming synthesis is deliberate for the first listening A/B. It returns
-complete MP3 bytes but not the streaming word-event contract, so manifests mark
-word alignment as required and ``align_subtitles.py`` fails closed on long
-untimed cues.
+Non-streaming synthesis is deliberate for the first listening A/B. The module
+also validates documented streaming event envelopes offline, but it does not
+guess undocumented provider word-item fields. Manifests therefore keep
+``words=[]`` and require forced alignment until a real schema fixture is
+verified.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -47,6 +49,207 @@ LANGUAGE_HINTS = (
 
 class DashScopeError(RuntimeError):
     pass
+
+
+TIMING_CONTRACT_VERSION = 1
+DASHSCOPE_TTS_DOC_URL = (
+    "https://help.aliyun.com/zh/model-studio/cosyvoice-python-sdk"
+)
+TIMESTAMP_UNSUPPORTED_MODELS = {"qwen-audio-3.0-tts-plus"}
+DOCUMENTED_EVENT_TYPES = {
+    "sentence-begin",
+    "sentence-synthesis",
+    "sentence-end",
+}
+
+
+def timing_text(value: str) -> str:
+    """Normalize only characters that cannot require an audible word slot."""
+    return "".join(
+        char
+        for char in unicodedata.normalize("NFKC", value)
+        if not char.isspace() and not unicodedata.category(char).startswith("P")
+    )
+
+
+def validate_word_timings(
+    source_text: str,
+    words: Any,
+    *,
+    complete: bool,
+    audio_duration_ms: int | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Validate canonical word timing records; provider aliases are not guessed."""
+    if not complete:
+        return [], "provider_result_incomplete"
+    if not isinstance(source_text, str) or not timing_text(source_text):
+        return [], "source_text_empty_after_normalization"
+    if not isinstance(words, list) or not words:
+        return [], "word_timings_missing"
+    if audio_duration_ms is not None and (
+        type(audio_duration_ms) is not int or audio_duration_ms <= 0
+    ):
+        return [], "audio_duration_invalid"
+
+    normalized: list[dict[str, Any]] = []
+    previous_end = 0
+    for index, item in enumerate(words):
+        if not isinstance(item, dict):
+            return [], f"word_{index}_not_object"
+        text = item.get("text")
+        start_ms = item.get("start_ms")
+        end_ms = item.get("end_ms")
+        if not isinstance(text, str) or not timing_text(text):
+            return [], f"word_{index}_text_invalid"
+        if type(start_ms) is not int or type(end_ms) is not int:
+            return [], f"word_{index}_time_not_integer_ms"
+        if start_ms < 0 or end_ms <= start_ms:
+            return [], f"word_{index}_time_range_invalid"
+        if start_ms < previous_end:
+            return [], f"word_{index}_time_not_monotonic"
+        if audio_duration_ms is not None and end_ms > audio_duration_ms:
+            return [], f"word_{index}_exceeds_audio_duration"
+        normalized.append({
+            "text": text,
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+            "confidence": item.get("confidence"),
+        })
+        previous_end = end_ms
+
+    if timing_text("".join(item["text"] for item in normalized)) != timing_text(
+        source_text
+    ):
+        return [], "word_text_does_not_cover_source"
+    return normalized, None
+
+
+def normalize_dashscope_event(message: Any) -> dict[str, Any]:
+    """Normalize only fields documented for ``ResultCallback.on_event``.
+
+    Current official documentation lists ``sentence.words`` but does not define
+    the fields of each item. Raw word objects therefore remain evidence and are
+    never mapped into publishable ``words`` here.
+    """
+    if isinstance(message, str):
+        try:
+            event = json.loads(message)
+        except json.JSONDecodeError as exc:
+            raise DashScopeError("DashScope timing event is not valid JSON") from exc
+    elif isinstance(message, dict):
+        event = message
+    else:
+        raise DashScopeError("DashScope timing event must be JSON text or an object")
+
+    header = event.get("header")
+    payload = event.get("payload")
+    if not isinstance(header, dict) or not isinstance(payload, dict):
+        raise DashScopeError("DashScope timing event lacks header/payload objects")
+    if header.get("event") != "result-generated":
+        raise DashScopeError("DashScope timing event is not result-generated")
+    output = payload.get("output")
+    if not isinstance(output, dict):
+        raise DashScopeError("DashScope timing event lacks payload.output")
+    event_type = output.get("type")
+    if event_type not in DOCUMENTED_EVENT_TYPES:
+        raise DashScopeError("DashScope timing event has an undocumented output.type")
+    sentence = output.get("sentence")
+    if not isinstance(sentence, dict):
+        raise DashScopeError("DashScope timing event lacks output.sentence")
+    index = sentence.get("index")
+    if type(index) is not int or index < 0:
+        raise DashScopeError("DashScope timing event has an invalid sentence index")
+    original_text = output.get("original_text")
+    if event_type in ("sentence-begin", "sentence-end") and not isinstance(
+        original_text, str
+    ):
+        raise DashScopeError("DashScope boundary event lacks original_text")
+    raw_words = sentence.get("words")
+    if raw_words is not None and not isinstance(raw_words, list):
+        raise DashScopeError("DashScope timing event sentence.words is not a list")
+    return {
+        "type": event_type,
+        "sentence_index": index,
+        "original_text": original_text if isinstance(original_text, str) else None,
+        "word_items_present": bool(raw_words),
+        "word_item_count": len(raw_words or []),
+    }
+
+
+def dashscope_timing_contract(
+    messages: list[Any],
+    source_text: str,
+    *,
+    model: str,
+    voice_source: str,
+    completed: bool,
+    streaming: bool,
+) -> dict[str, Any]:
+    """Classify provider timing evidence and fail closed when it is insufficient."""
+    normalized_events: list[dict[str, Any]] = []
+    event_error: str | None = None
+    try:
+        normalized_events = [normalize_dashscope_event(item) for item in messages]
+    except DashScopeError as exc:
+        event_error = str(exc)
+
+    end_events = [
+        item for item in normalized_events if item["type"] == "sentence-end"
+    ]
+    indexes = [item["sentence_index"] for item in end_events]
+    contiguous = indexes == list(range(len(indexes)))
+    event_text = "".join(item.get("original_text") or "" for item in end_events)
+    text_covered = bool(end_events) and timing_text(event_text) == timing_text(source_text)
+    word_items_present = bool(end_events) and all(
+        item["word_items_present"] for item in end_events
+    )
+
+    if not streaming:
+        reason = "nonstreaming_call_has_no_word_events"
+    elif model in TIMESTAMP_UNSUPPORTED_MODELS:
+        reason = "model_word_timestamps_not_supported"
+    elif voice_source != "cloned":
+        reason = "voice_timestamp_capability_not_documented"
+    elif not completed:
+        reason = "provider_result_incomplete"
+    elif event_error:
+        reason = "provider_event_invalid"
+    elif not contiguous:
+        reason = "sentence_events_not_contiguous"
+    elif not text_covered:
+        reason = "sentence_events_do_not_cover_source"
+    elif not word_items_present:
+        reason = "provider_word_items_missing"
+    else:
+        reason = "provider_word_item_schema_not_documented"
+
+    words, validation_error = validate_word_timings(
+        source_text,
+        [],
+        complete=completed,
+    )
+    return {
+        "schema_version": TIMING_CONTRACT_VERSION,
+        "status": "forced_alignment_required",
+        "mode": "listening_only",
+        "words": words,
+        "timestamps_source": "forced_alignment_required",
+        "reason": reason,
+        "validator_reason": validation_error,
+        "provider_evidence": {
+            "completed": completed,
+            "streaming": streaming,
+            "model": model,
+            "voice_source": voice_source,
+            "normalized_event_count": len(normalized_events),
+            "sentence_end_count": len(end_events),
+            "sentence_indexes_contiguous": contiguous,
+            "sentence_text_covers_source": text_covered,
+            "word_items_present": word_items_present,
+            "event_error": event_error,
+            "documentation": DASHSCOPE_TTS_DOC_URL,
+        },
+    }
 
 
 def portable_path(path: Path) -> str:
@@ -300,10 +503,16 @@ def make_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[tuple[str,
             "beijing_workspace_endpoint_only": True,
             "no_clobber_default": True,
         },
-        "timestamp_contract": (
-            "Non-streaming first-pass adapter; words remain empty and publish subtitles "
-            "require forced alignment until streaming word events are implemented."
-        ),
+        "timestamp_contract": {
+            "mode": "nonstreaming listening A/B",
+            "publish_words": "fail closed; nonstreaming call has no word events",
+            "streaming_evidence": (
+                "documented event envelopes can be normalized offline, but current "
+                "word-item fields are not documented"
+            ),
+            "fallback": "forced alignment",
+            "documentation": DASHSCOPE_TTS_DOC_URL,
+        },
     }
     return plan, segments
 
@@ -407,6 +616,14 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
             first_delay = synthesizer.get_first_package_delay()
         except Exception:
             pass
+        timing = dashscope_timing_contract(
+            [],
+            text,
+            model=args.model,
+            voice_source=args.voice_source,
+            completed=True,
+            streaming=False,
+        )
         result = {
             "name": name,
             "text": text,
@@ -421,8 +638,9 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
             "seed": args.seed,
             "request_id": request_id,
             "first_package_delay_ms": first_delay,
-            "words": [],
-            "timestamps_source": "alignment_required_nonstreaming",
+            "words": timing["words"],
+            "timestamps_source": timing["timestamps_source"],
+            "timing_contract": timing,
         }
         (out_dir / f"{name}.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -483,6 +701,57 @@ def cmd_self_test(_: argparse.Namespace) -> None:
     check(estimate["estimated_cost_cny"] == 0.00098, "cost estimate")
     check(version_tuple("1.26.4") == MIN_DASHSCOPE_VERSION, "SDK version parsing")
     check(is_mp3(b"ID3fixture"), "MP3 detection")
+    valid_words, reason = validate_word_timings(
+        "你好，API！",
+        [
+            {"text": "你", "start_ms": 0, "end_ms": 120},
+            {"text": "好", "start_ms": 120, "end_ms": 240},
+            {"text": "API", "start_ms": 260, "end_ms": 600},
+        ],
+        complete=True,
+        audio_duration_ms=700,
+    )
+    check(reason is None and len(valid_words) == 3, "strict word timing acceptance")
+    mock_event = {
+        "header": {"task_id": "offline-fixture", "event": "result-generated"},
+        "payload": {
+            "output": {
+                "type": "sentence-end",
+                "original_text": "你好",
+                "sentence": {
+                    "index": 0,
+                    "words": [{"undocumented": "intentionally-not-mapped"}],
+                },
+            }
+        },
+    }
+    normalized = normalize_dashscope_event(mock_event)
+    check(normalized["word_item_count"] == 1, "documented event envelope parsing")
+    timing = dashscope_timing_contract(
+        [mock_event],
+        "你好",
+        model="cosyvoice-v3.5-plus",
+        voice_source="cloned",
+        completed=True,
+        streaming=True,
+    )
+    check(not timing["words"], "undocumented DashScope word schema stays empty")
+    check(
+        timing["reason"] == "provider_word_item_schema_not_documented",
+        "DashScope word schema evidence classification",
+    )
+    unsupported = dashscope_timing_contract(
+        [mock_event],
+        "你好",
+        model="qwen-audio-3.0-tts-plus",
+        voice_source="system",
+        completed=True,
+        streaming=True,
+    )
+    check(
+        unsupported["reason"] == "model_word_timestamps_not_supported",
+        "Qwen-Audio Plus timestamp refusal",
+    )
     print("self-test passed")
 
 

@@ -1,6 +1,6 @@
 # Decision Index
 
-- Last verified: 2026-07-28
+- Last verified: 2026-07-29
 - Authority: explicit decisions in `93_运行记录/决策日志.md` and current user confirmation
 
 | Decision | Status | Consequence | Source | Reconsider when |
@@ -25,3 +25,4 @@
 | DEC-018 | Accepted | Audit image-consistency routes by exact code, adapter/checkpoint, base model, dependency weights, output terms, input rights, use scenario, and date. Do not treat maintenance status as licensing, do not generalize FaceID/InsightFace restrictions to generic IP-Adapter, and do not generalize one FLUX model license to the family. | Corrected K5 and image-model license research | A component/version/license or intended commercial use changes. |
 | DEC-019 | Accepted | Treat comic explanation as a visual/narrative grammar for original, public-domain, or licensed stories. Keep full-frame and comic cuts as same-content shadow variants; change only frame presentation in controlled tests, and never use Story Club/Reader's Digest/web comics as rewrite or frame sources without rights. | User direction, K11/T13, originality firewall | Licensed source material or same-content retention evidence supports a broader route. |
 | DEC-020 | Accepted | Treat TTS billing, rights, partial retries, output replacement, media dependencies, and subtitle timing as fail-closed production contracts: prices cannot be understated, stale prices block calls, paid segments resume from matching sidecars, existing outputs are not replaced implicitly, cloned voices require a consent record, and long untimed captions require forced alignment. | Voice safety review, `tts_minimax.py`, `tts_qwen_local.py`, `align_subtitles.py` | A provider exposes a stronger atomic/idempotent API or a verified timestamp contract replaces the local guards. |
+| DEC-021 | Accepted | Prioritize original stories with classic short-fiction clarity: ordinary characters, one anomalous action, explicit causality, evidence-backed reversal, and an action-based aftertaste. Do not adapt Story Club or other modern published stories; ancient/folk routes require separate source-text, edition, modern-arrangement, and audiovisual-rights review before G1. | User priority, GS candidate review, copyright/public-domain research, 2026-07-29 | Written authorization or a completed four-layer rights record permits a specific source adaptation. |
