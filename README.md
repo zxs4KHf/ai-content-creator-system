@@ -73,12 +73,12 @@ AI自媒体/
 │   └── T1 选题方案 · T2 分镜脚本 · T3 多平台改编
 │       T4 评审与复盘 · T5 角色卡 · T6 发布物料清单
 │       T7 矩阵实验 · T8 运动镜头卡 · T9/T10 语音盲测 · T11 外部样本特征卡
-│       T12 原创女声导演卡 · T13 漫画解说剪辑卡
+│       T12 原创女声导演卡 · T13 漫画解说剪辑卡 · T14 角色动画样片实验卡
 ├── 91_知识库/                 ★ 硬约束，AI 生成时必须对照
 │   └── K1 钩子公式 · K2 平台规格 · K3 叙事结构 · K4 数据诊断
 │       K5 生图一致性 · K6 AI合规红线 · K7 选题雷达源 · K8 AI视频运动设计
 │       K9 内容特征学习与矩阵实验 · K10 中文语音技术路线
-│       K11 原创故事漫画解说
+│       K11 原创故事漫画解说 · K12 稳定角色动画与资产管线
 ├── 92_工具箱/                 ★ 脚本即能力
 │   └── gen_images.py · tts_batch.py · tts_minimax.py · tts_dashscope.py
 │       tts_qwen_local.py · align_subtitles.py · build_video.py
@@ -203,6 +203,7 @@ AI自媒体/
 - [x] 完成强本地/开源 TTS 与 MiniMax 参考音色复审，并加入 dry-run/预算护栏
 - [x] 加入 Qwen-Audio 3.0 / CosyVoice 3.5 DashScope dry-run、预算、Workspace 与断点续跑护栏
 - [x] 建立原创故事漫画解说 K11/T13 与 `--frame-style comic` 影子剪辑，首版不覆盖 G3
+- [x] 审计高质量游戏二创的公开证据、声音训练和角色动画路线，建立 K12/T14 资产化动画合同
 - [ ] 在确认约 4–6GB 权重下载后试跑 Qwen3-TTS 1.7B `Serena/Vivian`；实测 OOM 才降 0.6B，不覆盖首条旁白
 - [ ] 配置 MiniMax 正式账号/Key 后先查 `Podcast_girl` 是否可用，以 ≤1 元上限完成 Speech 2.8 HD/Turbo T10 盲测
 - [ ] 配置北京地域 DashScope Key/Workspace 与原创 CosyVoice 音色后，以 ≤1 元上限完成 Qwen-Audio 3.0 / CosyVoice 3.5 同稿盲测
