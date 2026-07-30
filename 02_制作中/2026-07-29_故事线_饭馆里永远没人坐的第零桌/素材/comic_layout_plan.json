@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "impact_shot_budget": 1,
+  "note": "G2 planning-only layout: 7 full, 2 detail, 1 impact. No source images or production media exist yet. Detail focus uses normalized x/y/w/h and must be rechecked against approved images; complete context remains visible.",
+  "default": {
+    "panel_role": "full",
+    "action_state": "static",
+    "keyframe_role": "context"
+  },
+  "shot_01.png": {
+    "panel_role": "detail",
+    "focus": {
+      "x": 0.18,
+      "y": 0.28,
+      "w": 0.64,
+      "h": 0.30
+    },
+    "action_state": "static",
+    "keyframe_role": "evidence"
+  },
+  "shot_04.png": {
+    "action_state": "static",
+    "keyframe_role": "context"
+  },
+  "shot_05.png": {
+    "panel_role": "detail",
+    "focus": {
+      "x": 0.12,
+      "y": 0.44,
+      "w": 0.76,
+      "h": 0.34
+    },
+    "action_state": "static",
+    "keyframe_role": "evidence"
+  },
+  "shot_06.png": {
+    "action_state": "static",
+    "keyframe_role": "evidence"
+  },
+  "shot_07.png": {
+    "action_state": "initial",
+    "keyframe_role": "setup"
+  },
+  "shot_08.png": {
+    "action_state": "development",
+    "keyframe_role": "bridge"
+  },
+  "shot_09.png": {
+    "action_state": "development",
+    "keyframe_role": "bridge"
+  },
+  "shot_10.png": {
+    "panel_role": "impact",
+    "action_state": "final",
+    "keyframe_role": "endpoint"
+  }
+}

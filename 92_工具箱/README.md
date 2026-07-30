@@ -204,6 +204,7 @@ MiniMax 脱敏原始词时间响应，在字段合同实测确认前不伪造逐
 ```powershell
 python tts_qwen_local.py synthesize `
   --model-dir ../.tools/models/Qwen3-TTS-12Hz-1.7B-CustomVoice `
+  --model-source-revision <官方 Hub commit> `
   --text-file ../90_模板库/T10_语音盲测基准.txt `
   --out ../.tools/qwen_ab/serena `
   --speaker Serena `
@@ -213,8 +214,11 @@ python tts_qwen_local.py synthesize `
 真正加载需再加 `--execute --confirm-local-run`。脚本强制四个离线环境开关，不接受 URL/远端模型 ID，
 并向加载器传 `local_files_only=True`，也不会自动安装依赖；默认要求至少 7000MiB 空闲显存。
 preflight 要求官方 1.7B CustomVoice 架构、随仓 speech tokenizer、至少 4GB safetensors，并记录内容哈希；
+同时拒绝 CPU-only PyTorch，`torch` / `torchaudio` 必须从 PyTorch 官方 CUDA 索引安装为匹配版本。
 默认按官方示例使用 bfloat16。执行前还要求 ffmpeg/ffprobe，已有成品默认拒绝覆盖，部分分段按完整
-请求合同安全续跑。权重与独立环境仍需单独授权后准备。
+请求合同与 WAV 哈希安全续跑；manifest 同时记录官方源 revision、本地模型内容指纹、运行依赖版本、
+逐段 WAV 哈希和合并音频哈希。Hugging Face 本地快照可自动读出 commit；若显式传入的 commit 与
+本地快照元数据不一致，执行器会拒绝继续。权重与独立环境仍需单独授权后准备。
 
 阿里百炼 Qwen-Audio/CosyVoice 适配器同样默认 dry-run，固定北京 Workspace 域名；Key 与 Workspace ID
 分别只读 `DASHSCOPE_API_KEY`、`DASHSCOPE_WORKSPACE_ID`：

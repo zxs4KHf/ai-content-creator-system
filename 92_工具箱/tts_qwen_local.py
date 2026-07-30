@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -143,6 +145,22 @@ def model_inventory(model_dir: Path) -> dict[str, Any]:
     }
 
 
+def resolve_model_source_revision(model_dir: Path, declared: str) -> str | None:
+    tree_dir = model_dir / ".cache" / "huggingface" / "trees"
+    detected = sorted(
+        path.stem for path in tree_dir.glob("*.json")
+        if re.fullmatch(r"[0-9a-f]{40}", path.stem)
+    ) if tree_dir.is_dir() else []
+    detected_revision = detected[0] if len(detected) == 1 else None
+    declared_revision = declared.strip() or None
+    if detected_revision and declared_revision and detected_revision != declared_revision:
+        raise QwenLocalError(
+            "Declared model source revision does not match the local Hugging Face "
+            f"snapshot metadata: {declared_revision} != {detected_revision}"
+        )
+    return detected_revision or declared_revision
+
+
 def gpu_status() -> dict[str, Any]:
     try:
         result = subprocess.run([
@@ -174,6 +192,21 @@ def dependency_status() -> dict[str, bool]:
     }
 
 
+def dependency_versions() -> dict[str, str | None]:
+    versions: dict[str, str | None] = {}
+    for package in ("qwen-tts", "torch", "soundfile"):
+        try:
+            versions[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
+
+
+def torch_cuda_build_available(versions: dict[str, str | None]) -> bool:
+    version = versions.get("torch") or ""
+    return re.search(r"\+cu\d+$", version) is not None
+
+
 def offline_environment() -> dict[str, str]:
     values = {
         "HF_HUB_OFFLINE": "1",
@@ -195,7 +228,8 @@ def require_media_tools() -> None:
 
 
 def reusable_segment(out_dir: Path, name: str, text: str, seed: int,
-                     args: argparse.Namespace, model_revision: str
+                     args: argparse.Namespace, model_revision: str,
+                     model_source_revision: str | None,
                      ) -> tuple[Path, dict[str, Any]] | None:
     sidecar_path = out_dir / f"{name}.json"
     if not sidecar_path.exists():
@@ -224,6 +258,7 @@ def reusable_segment(out_dir: Path, name: str, text: str, seed: int,
         "voice": args.speaker,
         "model": MODEL_NAME,
         "model_revision": model_revision,
+        "model_source_revision": model_source_revision,
         "language": args.language,
         "instruction": args.instruction,
         "seed": seed,
@@ -236,6 +271,11 @@ def reusable_segment(out_dir: Path, name: str, text: str, seed: int,
         )
     if not audio_path.is_file() or audio_path.stat().st_size == 0:
         raise QwenLocalError(f"Partial segment {name} has no valid audio file: {audio_path}")
+    if sidecar.get("audio_sha256") != sha256_file(audio_path):
+        raise QwenLocalError(
+            f"Partial segment {name} audio hash is missing or does not match; "
+            "inspect it before retrying or use --overwrite"
+        )
     return audio_path, sidecar
 
 
@@ -243,15 +283,21 @@ def make_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[tuple[str,
     source = Path(args.text_file).resolve()
     segments = read_segments(source)
     model_dir = Path(args.model_dir).expanduser().resolve()
+    model_source_revision = resolve_model_source_revision(
+        model_dir, args.model_source_revision
+    )
     inventory = model_inventory(model_dir)
     gpu = gpu_status()
     dependencies = dependency_status()
+    versions = dependency_versions()
+    torch_cuda_build = torch_cuda_build_available(versions)
     enough_vram = bool(
         gpu.get("available")
         and gpu.get("memory_free_mb", 0) >= args.minimum_free_vram_mb
     )
     status = "planned_ready" if (
         inventory["ready"] and enough_vram and all(dependencies.values())
+        and torch_cuda_build
     ) else "planned_not_ready"
     plan = {
         "schema_version": 1,
@@ -259,6 +305,7 @@ def make_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[tuple[str,
         "provider": "local:qwen3-tts",
         "model": MODEL_NAME,
         "model_source": MODEL_SOURCE,
+        "model_source_revision": model_source_revision,
         "model_revision": (
             f"local-inventory-sha256:{inventory.get('weight_inventory_sha256')}"
             if inventory.get("ready") else None
@@ -280,6 +327,9 @@ def make_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[tuple[str,
             "minimum_free_vram_mb": args.minimum_free_vram_mb,
             "enough_free_vram": enough_vram,
             "dependencies": dependencies,
+            "dependency_versions": versions,
+            "torch_cuda_build": torch_cuda_build,
+            "python_version": sys.version.split()[0],
             "attention": args.attention,
             "dtype": args.dtype,
             "offline_environment": offline_environment(),
@@ -365,6 +415,11 @@ def require_execution(args: argparse.Namespace, plan: dict[str, Any], need_model
     missing = [name for name, ready in plan["runtime"]["dependencies"].items() if not ready]
     if missing:
         raise QwenLocalError(f"Missing isolated-environment dependencies: {', '.join(missing)}")
+    if not plan["runtime"].get("torch_cuda_build"):
+        raise QwenLocalError(
+            "Installed torch distribution is not an official CUDA wheel; "
+            "install a matching torch/torchaudio CUDA pair before execution"
+        )
     if not plan["runtime"]["gpu"].get("available"):
         raise QwenLocalError("A CUDA GPU visible to nvidia-smi is required")
     if not plan["runtime"]["enough_free_vram"]:
@@ -377,12 +432,17 @@ def require_execution(args: argparse.Namespace, plan: dict[str, Any], need_model
 
 def cmd_preflight(args: argparse.Namespace) -> None:
     model_dir = Path(args.model_dir).expanduser().resolve()
+    versions = dependency_versions()
     result = {
         "provider": "local:qwen3-tts",
         "model_name": MODEL_NAME,
+        "model_source_revision": resolve_model_source_revision(model_dir, ""),
         "model": model_inventory(model_dir),
         "gpu": gpu_status(),
         "dependencies": dependency_status(),
+        "dependency_versions": versions,
+        "torch_cuda_build": torch_cuda_build_available(versions),
+        "python_version": sys.version.split()[0],
         "offline_only": True,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -409,12 +469,16 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
             f"--overwrite explicitly: {', '.join(path.name for path in collisions)}"
         )
     model_revision = plan.get("model_revision") or "unverified-local-model"
+    model_source_revision = plan.get("model_source_revision")
     prepared: list[tuple[str, str, int, tuple[Path, dict[str, Any]] | None]] = []
     for index, (name, text) in enumerate(segments):
         seed = args.seed + index
         prepared.append((
             name, text, seed,
-            reusable_segment(out_dir, name, text, seed, args, model_revision),
+            reusable_segment(
+                out_dir, name, text, seed, args, model_revision,
+                model_source_revision,
+            ),
         ))
     need_model = any(existing is None for _, _, _, existing in prepared)
     require_execution(args, plan, need_model)
@@ -491,11 +555,13 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
             "voice": args.speaker,
             "model": MODEL_NAME,
             "model_revision": model_revision,
+            "model_source_revision": model_source_revision,
             "language": args.language,
             "instruction": args.instruction,
             "dtype": args.dtype,
             "seed": seed,
             "sample_rate": sample_rate,
+            "audio_sha256": sha256_file(path),
             "elapsed_s": round(elapsed, 3),
             "rtf": round(elapsed / duration, 3) if duration else None,
             "peak_vram_mb": round(torch.cuda.max_memory_allocated() / 1024 / 1024, 1),
@@ -532,6 +598,7 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
         "generated_on": date.today().isoformat(),
         "narration": narration,
         "audio_path": narration,
+        "narration_sha256": sha256_file(out_dir / narration),
         "pause_ms": args.pause_ms,
         "sample_rate": sample_rate,
         "total_duration_s": total_duration,
@@ -566,6 +633,14 @@ def cmd_self_test(_: argparse.Namespace) -> None:
     check(timeline[1]["start_s"] == 1.35, "pause boundary")
     check(timeline[1]["end_s"] == 3.35, "final boundary")
     check(offline_environment()["HF_HUB_OFFLINE"] == "1", "offline environment")
+    check(
+        torch_cuda_build_available({"torch": "2.11.0+cu130"}),
+        "CUDA torch build detection",
+    )
+    check(
+        not torch_cuda_build_available({"torch": "2.13.0"}),
+        "CPU torch build rejection",
+    )
     print("self-test passed")
 
 
@@ -581,6 +656,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     synth = sub.add_parser("synthesize", help="plan or run local synthesis")
     synth.add_argument("--model-dir", required=True)
+    synth.add_argument(
+        "--model-source-revision", default="",
+        help="official hub commit/revision used to prepare the local model directory",
+    )
     synth.add_argument("--text-file", required=True)
     synth.add_argument("--out", required=True)
     synth.add_argument("--speaker", choices=("Serena", "Vivian"), default="Serena")
