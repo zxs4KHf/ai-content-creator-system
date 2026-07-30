@@ -1,51 +1,51 @@
 # Current State
 
-- Last verified: 2026-07-29
+- Last verified: 2026-07-30
 - Branch: `review/last-librarian-g1-g2`, tracking `origin/review/last-librarian-g1-g2`
-- Verified baseline before this worktree: `1c5a296` (`docs: hand off story comic and timing round`); the current research/workflow handoff commit follows it
+- Implementation commit: `da358eb` (`feat: prepare GS02 G2 and local Qwen voice lab`)
 - Integration branch: local and remote `main` remain unchanged at `b898bd9`
-- Worktree target after handoff commit: clean; ignored local environments, FFmpeg, dry-run plans, QA frames, voice samples, concat files, and preview videos remain local
-- Current phase: the first original Bilibili pilot still waits at human G3/login; six original classic-short-fiction candidates wait at G1; high-quality game-derivative public evidence, voice-training routes, and versioned character-animation methodology are now documented and wired into the workflow
+- Worktree target after this handoff commit: clean; model weights, Python environments, voice plans, setup manifest and any future WAV files remain ignored local state
+- Current phase: GS02 has passed human G1 and now waits at human G2; local Qwen3-TTS is fully prepared but waits at the 7000 MiB free-VRAM gate; the first original pilot still waits at G3/login
 
 ## Working
 
-- [VERIFIED] `py -3 92_工具箱/verify_workflows.py` remains the repeatable offline check. After the research/workflow changes it passed all nine production CLI AST/help paths, five self-test/test commands, 10 TTS timing-contract tests, 26 real subtitle cues, and both full/comic 11-shot contracts without network, credentials, billable calls, or production-media writes.
-- [VERIFIED] Four new reports separate public evidence, technical inference, unknowns, licenses, 8GB feasibility, cost, and replication stability: `调研_高质量游戏二创公开证据_2026-07-29.md`, `调研_GitHub声音训练与变声路线_2026-07-29.md`, `调研_角色动画服饰年龄变化复刻路线_2026-07-29.md`, and `调研_高质量游戏二创稳定复刻总路线_2026-07-29.md`.
-- [VERIFIED] The referenced Bilibili UID 59528875 is `喜欢长离捏`. Its public homepage exposes `blender`, `AE教程`, and `剪辑教程` favorite categories; the latest inspected representative video is marked `含AI生成内容` and credits a two-person `UP主 + 后期` team. A separate inspected video demonstrates a child/downsized character variant.
-- [INFERRED] The public work is best explained by a reusable 3D asset/rig/animation/camera/render/post pipeline with AI assistance, not by ordinary prompt-only video generation. The exact software versions, asset sources, rig/mocap route, voice model, training recipe, and GitHub identity remain unverified.
-- [VERIFIED] K12/T14 now define a durable character-animation contract: `CHARACTER_ID / ASSET_VERSION / AGE_VARIANT / OUTFIT_ID / FACE_SET / RIG_VERSION / RIGHTS_RECORD`, separate body/face/lips/camera/contact/secondary tracks, deterministic fallback, 1–3 generated hero shots, five-point/contact QA, resource budgets, and stop conditions.
-- [VERIFIED] `zimeiti-script`, `zimeiti-visual`, and `zimeiti-video` now load K12/T14 when long-term characters, outfit/age variants, 2D/3D rigs, or stochastic hero shots are involved. The visual skill's stale Qwen recommendation was corrected from 0.6B-first to 1.7B-first with measured-OOM fallback.
-- [DOCUMENTED] The stable reference-quality route is asset-driven. For this project, classic-story comic/2D remains the near-term default; an original Blender character pipeline starts only after content evidence, while random I2V/V2V remains a reversible hero-shot experiment.
-- [VERIFIED] The voice audit routes MiniMax Voice Design + Speech 2.8 HD as the first cost-effective original-voice challenger: 9.9 CNY on first activation and 3.5 CNY/10k billing characters; the existing 374-billing-character T10 sample estimates 0.1309 CNY synthesis cost. Qwen3-TTS 1.7B and VoxCPM2 remain the two local candidates.
-- [VERIFIED] VoxCPM2's official repository states approximately 8GB inference VRAM and 5–10 minutes for LoRA adaptation. This is a boundary, not a local stability guarantee; the machine had about 5.7GB free VRAM during the audit. F5 official Base weights and current Fish local weights remain excluded from monetized production by their non-commercial/research license paths.
-- [VERIFIED] The unchanged visual candidates remain A=`preview_v2.mp4`, B=`preview_comic_v2.mp4`, and C=`preview_comic_v3_hierarchy.mp4`; no production media or existing audio was replaced.
+- [VERIFIED] GS02 `《饭馆里永远没人坐的“第零桌”》` now has a complete G2 package under `02_制作中/2026-07-29_故事线_饭馆里永远没人坐的第零桌/`: topic contract, story text, 10-shot storyboard, six-frame grayscale causality board, G2 review form, motion design and comic layout plan.
+- [VERIFIED] The story uses the frozen chain `异常账目 → 空间排除 → 怀疑免单/抹账 → 错单证据 → 老板复现错误 → 重做并落名`. Its reverse is evidence-backed rather than introduced at the ending.
+- [VERIFIED] The recommended opening is A / K1 B4: `账上有“第零桌”，店里却没有。` B remains a visual-impact shadow option; C spends the final action too early.
+- [VERIFIED] The visual contract is 10 shots with `7 full / 2 detail / 1 impact`, two reversible hero-motion candidates, 11 byte-identical style locks, a continuity ledger and zero formal image/audio/video files. A cross-shot pencil/identity conflict was removed by separating the clerk's fixed brass-pin marker from the shared cashier pencil.
+- [VERIFIED] GS02 is original fictional production planning. It does not use Story Club, Yilin, web-fiction, comics, film or creator videos as a rewrite source; it carries `虚构故事 / 剧情演绎 / AI生成内容` and explicitly states that the responsibility column is not wage deduction or employee punishment.
+- [VERIFIED] The official `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` snapshot is complete in an ignored local directory at commit `0c0e3051f131929182e2c023b9537f8b1c68adfe`. The two safetensors total 4,515,695,644 bytes and pass architecture, bundled-tokenizer and content-fingerprint checks.
+- [VERIFIED] The isolated runtime uses Python 3.11.7, `qwen-tts 0.1.1`, `torch 2.11.0+cu130`, `torchaudio 2.11.0+cu130` and `soundfile 0.14.0`; CUDA sees the RTX 3060 Ti. `pip check` reports no broken requirements.
+- [VERIFIED] Serena and Vivian share one fixed T10 warm-story probe, instruction and seed `42029`. Both dry-run plans are reproducible and report only the free-VRAM gate as not ready. Local details and hashes are in ignored `.tools/voice_lab/setup_manifest.json`; the durable sanitized record is `93_运行记录/推进_本地Qwen声音实验准备_2026-07-30.md`.
+- [VERIFIED] `tts_qwen_local.py` now rejects CPU-only torch before model load, records/detects the official source revision, refuses source-revision mismatch, records runtime versions and WAV hashes, and verifies partial-audio hashes before resuming.
+- [VERIFIED] The prior A/B/C visual candidates for the first story remain unchanged. No existing narration, image, video, account state or GPU process was changed.
 
 ## Broken, blocked, or uncertain
 
-- [DOCUMENTED] Human G1 is still required before creating a classic-story production folder. Recommended first candidate remains GS02 `饭馆里永远没人坐的“第零桌”`.
-- [DOCUMENTED] Human G3 is still required for A/B/C. Their narration is the same old AI-toned voice, so visual review must ignore shared voice quality.
-- [VERIFIED] No high-quality natural female candidate was generated or ranked by ear. No cloud key/account, billable call, voice design/clone, model download, Blender project, motion-capture recording, or GPU process change was performed.
-- [UNKNOWN] No public creator statement proves the exact Blender/UE/MMD, model extraction, rig, mocap, AE, TTS/VC, training, or GitHub route. Public favorite categories are evidence of interest, not proof of actual project files.
-- [DOCUMENTED] The user's old QQ group history was not bulk-crawled. A minimal keyword list and redaction protocol are in the public-evidence report; private messages, member identities, and group files remain out of scope unless the operator supplies a narrow, sanitized export or explicitly authorizes a visible read-only check.
-- [DOCUMENTED] Unauthorized game-character/voice cloning is not a production route. Research may compare GPT-SoVITS, RVC, Seed-VC, CosyVoice, IndexTTS2, OpenVoice, Qwen, and VoxCPM technically, but publishable assets require original/authorized voice data and separate IP/model/audio rights.
-- [VERIFIED] Qwen3-TTS/VoxCPM/CosyVoice/FramePack/LTX weights were not downloaded. Model-code licenses do not automatically cover checkpoints, base models, adapters, inputs, or outputs.
-- [DOCUMENTED] Bilibili registration/login, phone, OTP, CAPTCHA, real-name information, upload, platform declarations, and final publication remain operator-only visible-browser steps. No upload or publication was handled.
+- [DOCUMENTED] GS02 must stop at human G2. No formal image, narration, subtitle timeline, animatic or video may be generated until the operator approves the story and selects A/B/C.
+- [VERIFIED] The RTX 3060 Ti had only about 5.6 GiB free during the final checks; the local executor requires 7000 MiB. Two confirmed execution attempts stopped before model load. No audio was generated.
+- [UNKNOWN] Qwen3-TTS 1.7B peak VRAM, RTF, stability and the actual Serena/Vivian listening quality on this machine remain unverified. Do not claim either voice is good until WAVs exist and pass T9 blind review.
+- [DOCUMENTED] Do not lower the VRAM guard, kill unrelated GPU processes, use swap tricks or pre-emptively downgrade to 0.6B. Only consider 0.6B after a released-GPU, single-model, batch-1 1.7B run still fails/OOMs.
+- [DOCUMENTED] The first story still needs human G3 visual choice among A/B/C; their narration remains the same old AI-toned baseline.
+- [DOCUMENTED] Bilibili login/registration, phone/OTP/CAPTCHA, real-name information, upload, AI declarations and final publication remain operator-only visible-browser steps.
+- [UNKNOWN] GS02's grayscale causality board has not been shown to an uninformed human. The responsibility-column interpretation and opening preference remain G2 judgments, not verified audience results.
 
 ## Verification performed
 
-- Restored and reconciled the branch/worktree against `CURRENT.md`, `PROJECT.md`, Git history, HEAD, remote tracking, and `main`; no contradiction was found.
-- Committed and pushed the previous story-comic/timing handoff as `1c5a296`; `main` stayed at `b898bd9`.
-- Read the referenced public Bilibili profile and two representative public video pages without downloading video/audio/transcripts; verified profile categories, public AI label, team credits, and visible asset characteristics.
-- Cross-checked technical claims against primary GitHub repositories, official model cards/docs, MiniMax pricing, Alibaba voice-design documentation, UE documentation/EULA, Kuro's public derivative-creation guideline, and CAC deep-synthesis/AI-label rules.
-- Ran `git diff --check`, placeholder/evidence/source scans, and the full offline `verify_workflows.py`; all passed.
-- Did not use private group data, call APIs, pay, design/clone a real voice, download weights, stop GPU processes, create 2D/3D assets, approve G1/G3, log in/upload/publish, or merge `main`.
+- Reconciled `CURRENT.md`, `PROJECT.md`, branch, HEAD, remote tracking, `main`, worktree and recent history before implementation; no starting contradiction was found.
+- Ran `py -3 92_工具箱/verify_workflows.py`: all nine CLI AST/help paths, six self-test/test commands, 10 TTS timing-contract tests, 26 real subtitle cues, and both full/comic 11-shot contracts passed offline.
+- Loaded the GS02 comic plan through the real `build_video.py` validator: 10 shots and the `7/2/1` panel-role budget passed.
+- Checked GS02 for identical style locks, prompt pronouns, stale pencil identity, formal media, JSON validity, secret patterns, machine absolute paths and whitespace errors; all passed.
+- Verified official model revision metadata, both safetensors hashes, architecture and bundled tokenizer; verified CUDA availability and matching torch/torchaudio versions.
+- Ran Serena/Vivian dry-runs and two guarded execution attempts. Both refused before model load because free VRAM was below 7000 MiB.
+- Did not run real inference, generate/review audio, generate images/video, approve G2/G3, stop GPU processes, log in, upload, publish, merge `main`, or commit ignored model/environment/audio assets.
 
 ## Next three actions
 
-1. Human G1: approve one original classic-short-fiction candidate. Recommended command: `GS02 G1通过`. Then create its production folder and stop again at G2 with script, six-frame grayscale causality board, comic layout, and K12 asset-tier/reuse fields.
-2. Human G3 when convenient: compare A/B/C for visual comprehension and fatigue while ignoring their identical narration; choose one or return specific visual notes.
-3. Authorize exactly one voice experiment: recommended MiniMax original Voice Design + Speech 2.8 HD under about 10.5 CNY total, or a single local Qwen3-TTS 1.7B/VoxCPM2 download after GPU release. No role/actor clone.
+1. Human G2: review `04_评审单.md`. Recommended response: `GS02 G2通过，钩子A`. If returning changes, name the hook, causality or responsibility-column concern.
+2. When `nvidia-smi` reports at least 7000 MiB free, run Serena and Vivian one at a time from the fixed ignored plans. Preserve separate outputs and record WAV hash, peak VRAM, RTF and any error; then create a T9 blind-review card.
+3. When convenient, complete the first story's G3 A/B/C visual review while ignoring their shared old narration.
 
 ## Resume from here
 
-The exact next production action requires a human gate. If the operator says `GS02 G1通过`, start from `93_运行记录/推进_经典故事感G1候选_2026-07-29.md`, create one `02_制作中/` folder from T1/T2/T13, add the K12 `REUSE_POTENTIAL / ASSET_TIER / HERO_MOTION` fields, produce the original G2 package, and stop for G2. For a voice experiment, start from K10/T9/T12 and `调研_GitHub声音训练与变声路线_2026-07-29.md`; require the chosen route, credentials/environment, budget/download authorization, and keep output as a shadow. For character animation, use K12/T14 and do a 20-second original-character sample before any full 3D episode.
+First run `nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits`. If free VRAM is below 7000 MiB, do not load Qwen or alter other processes; remain at the two human/VRAM gates. If it is at least 7000 MiB, read `93_运行记录/推进_本地Qwen声音实验准备_2026-07-30.md` and the ignored `.tools/voice_lab/setup_manifest.json`, then execute exactly one speaker with the fixed T10 probe, instruction, seed and source revision. For GS02, do not proceed past `04_评审单.md` until the operator explicitly approves G2 and chooses A/B/C.
