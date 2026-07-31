@@ -11,6 +11,7 @@
 
 - [VERIFIED] GS02 `《饭馆里永远没人坐的“第零桌”》` now has a complete G2 package under `02_制作中/2026-07-29_故事线_饭馆里永远没人坐的第零桌/`: topic contract, story text, 10-shot storyboard, six-frame grayscale causality board, G2 review form, motion design and comic layout plan.
 - [VERIFIED] GitHub repository `zxs4KHf/ai-content-creator-system` is public; its default branch remains `main`, and this review branch remains independently pushed. No merge or rewrite was performed.
+- [VERIFIED] Public contribution intake is now documented in root `CONTRIBUTING.md`: contributors work only from personal Forks and independent branches, submit one-topic Draft PRs, and may contribute reproducible issues, refined/de-identified experiment cases, documentation, tests or minimal fixes. `.github/` supplies Draft-PR, bug/try-run and experiment-report templates; `docs/外部试跑Agent约束提示词.md` gives external Agents a bounded, human-reviewed operating prompt.
 - [VERIFIED] The story uses the frozen chain `异常账目 → 空间排除 → 怀疑免单/抹账 → 错单证据 → 老板复现错误 → 重做并落名`. Its reverse is evidence-backed rather than introduced at the ending.
 - [VERIFIED] The recommended opening is A / K1 B4: `账上有“第零桌”，店里却没有。` B remains a visual-impact shadow option; C spends the final action too early.
 - [VERIFIED] The visual contract is 10 shots with `7 full / 2 detail / 1 impact`, two reversible hero-motion candidates, 11 byte-identical style locks, a continuity ledger and zero formal image/audio/video files. A cross-shot pencil/identity conflict was removed by separating the clerk's fixed brass-pin marker from the shared cashier pencil.
@@ -35,6 +36,7 @@
 
 - Reconciled `CURRENT.md`, `PROJECT.md`, branch, HEAD, remote tracking, `main`, worktree and recent history before implementation; no starting contradiction was found.
 - Checked every reachable Git commit for common GitHub/AWS/private-key secret signatures without printing candidate values, and checked tracked paths for environment, private-key, model and virtual-environment files; no matches were found before changing repository visibility to public. GitHub CLI then verified public visibility.
+- Ran `py -3 92_工具箱/verify_workflows.py` after adding the public contribution intake documentation and templates; all offline checks passed. No GitHub branch-protection setting was changed automatically; the contributor guide records the recommended maintainer-side protections.
 - Ran `py -3 92_工具箱/verify_workflows.py`: all nine CLI AST/help paths, six self-test/test commands, 10 TTS timing-contract tests, 26 real subtitle cues, and both full/comic 11-shot contracts passed offline.
 - Loaded the GS02 comic plan through the real `build_video.py` validator: 10 shots and the `7/2/1` panel-role budget passed.
 - Checked GS02 for identical style locks, prompt pronouns, stale pencil identity, formal media, JSON validity, secret patterns, machine absolute paths and whitespace errors; all passed.
