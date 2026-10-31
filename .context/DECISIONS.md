@@ -1,16 +1,12 @@
-# Decision Index
+# 决策
 
-- Last verified: 2026-07-27
-- Authority: explicit decisions in `93_运行记录/决策日志.md` and current user confirmation
+只记仍然有效的决定。过时的直接删。
 
-| Decision | Status | Consequence | Source | Reconsider when |
-| --- | --- | --- | --- | --- |
-| DEC-001 | Accepted | Use `91_知识库/` as hard generation constraints instead of optional reading. | `93_运行记录/决策日志.md` | A replacement validation system is implemented. |
-| DEC-002 | Accepted | Use six repository-local Claude skills to encode the production workflows. | `93_运行记录/决策日志.md` | The agent runtime or workflow model changes materially. |
-| DEC-003 | Accepted | Use reference art plus identity/style/clue locks to control character consistency. | `93_运行记录/决策日志.md` | A tested generation model makes the locks unnecessary. |
-| DEC-004 | Accepted | Use ffmpeg for batch video production; reserve Jianying drafts for higher-value manual refinement. | `93_运行记录/决策日志.md` | Export automation or production volume changes. |
-| DEC-005 | Accepted | Use edge-tts because word timing supports the subtitle pipeline. | `93_运行记录/决策日志.md` | Quality, availability, licensing, or timing support becomes unsuitable. |
-| DEC-006 | Accepted | Render knowledge-line text as HTML/cards rather than asking diffusion models to draw Chinese text. | `93_运行记录/决策日志.md` | Image models demonstrate reliable, editable Chinese typography. |
-| DEC-007 | Accepted | Keep authenticated publishing and private data collection on local Windows; do not share platform cookies with cloud sessions. | `93_运行记录/决策日志.md` | An approved secure publishing service replaces local authentication. |
-| DEC-008 | Accepted | Do not add n8n, Dify, or Coze as another orchestration layer for the initial workflow. | `93_运行记录/决策日志.md` | A concrete integration need outweighs the maintenance cost. |
-| DEC-009 | Accepted | Create a new GitHub repository for this recovered project and use `main` as the integration branch. | User confirmation, 2026-07-27 | Repository ownership or collaboration needs change. |
+| 日期 | 决定 | 原因 |
+| --- | --- | --- |
+| 2026-10-31 | 旧的 G1/G2/G3 流水线、知识库、模板、Skill 全部归档 | 它们让判断跟着旧流程走，且从未产出一条发布内容 |
+| 2026-10-31 | 主要用代码生成视频，模型视频只作补充 | 模型结果难以把控 |
+| 2026-10-31 | 《吞》否决，改做《喂》约 3 分钟，每章换时代风格，音乐加少量旁白 | 《吞》只有一个观点，且风格割裂 |
+| 2026-10-31 | 《喂》全片共用版式：同一个“喂”字位置、同一个年份读数、同一种字幕，只换材质 | 防止换风格后再次不统一。原定的传输计时器放弃，因为烽火等章节没有可靠速度数字 |
+| 2026-10-31 | 气质：保留深度，但换说法 | 本人选择 |
+| 2026-10-31 | MiniMax 暂不开通，优先用免费额度和阿里云 | 本人选择 |

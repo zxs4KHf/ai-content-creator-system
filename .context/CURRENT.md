@@ -1,41 +1,13 @@
-# Current State
+# 当前
 
-- Last verified: 2026-07-27
-- Branch: `main`, tracking `origin/main`
-- Commit: `1fa1ab6` (recovered v2 baseline; context synchronization follows it)
-- Worktree: clean after the recovered baseline; `_backup_v1/` is retained locally and ignored by Git
-- Current phase: baseline secured in a private GitHub repository; awaiting G1/G2 human review
+- 仓库已于 2026-10-31 重建。旧文件留在本机归档，不进 Git。
+- 分支 `review/last-librarian-g1-g2`。
 
-## Working
+## 进行中：《喂》
 
-- [VERIFIED] The incoming tar archive is readable and its 43-file index matches the 43 recovered project files by count.
-- [VERIFIED] Relative to `_backup_v1`, v2 adds 35 files, changes 8 files, deletes none, and contains no Git conflict markers.
-- [VERIFIED] All five Python tools parse under Python 3.12 and all five CLI `--help` paths exit successfully.
-- [DOCUMENTED] The v2 workflow, knowledge base, six Claude skills, templates, and first story package have been created.
-- [VERIFIED] Private repository `zxs4KHf/ai-content-creator-system` exists, with local `main` tracking `origin/main`.
+- 位置：`作品/喂/`。节拍表和样张已获本人确认，分章制作中，每章交本人验收。
+- 下一步：开场和第 1 章。
+- 音乐：本人指定“vibe 知识大赏”的那首曲子，名称和授权待查。
+- 旁白声音未定，候选在 `参考/声音试听/`。
 
-## Broken, blocked, or uncertain
-
-- [VERIFIED] `ffmpeg` and `ffprobe` are not available on the current PATH.
-- [UNKNOWN] External API, TTS, video-rendering, Jianying, and publishing paths have not been exercised end to end on this machine.
-- [DOCUMENTED] `02_制作中/2026-07-26_故事线_最后一位图书管理员/04_评审单.md` is waiting for G1 and G2 human decisions; no source images or G3 artifact exist.
-- [DOCUMENTED] Several platform limits in `91_知识库/K2_平台规格手册.md` remain marked for manual verification.
-
-## Verification performed
-
-- Confirmed that the recovered target originally contained no Git metadata before repository initialization.
-- Compared SHA-256 hashes for the eight v1 files against v2; all eight changed, 35 files were added, and none were removed.
-- Checked archive readability, recovered-file count, and absence of conflict markers.
-- Parsed all five Python files with `ast.parse` under Python 3.12.13.
-- Ran `--help` for all five Python CLIs with bytecode generation disabled.
-- Did not install dependencies, call external APIs, generate media, log in to platforms, publish content, or run a full video pipeline.
-
-## Next three actions
-
-1. Have the operator review and record G1/G2 decisions in the story review form.
-2. Create a development branch for any requested content or tooling changes; keep `main` as the reviewed baseline.
-3. Create isolated fixture-based smoke tests, install ffmpeg, and verify dry-run/TTS/subtitle/video paths before G3.
-
-## Resume from here
-
-Open `02_制作中/2026-07-26_故事线_最后一位图书管理员/04_评审单.md`, record the operator's G1/G2 decision, then create a development branch before applying any requested changes.
+本机信息见 `.context/LOCAL.md`，本人的原话见 `.context/FEEDBACK.md`。

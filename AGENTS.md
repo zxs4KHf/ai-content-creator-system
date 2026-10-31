@@ -1,28 +1,49 @@
-# Repository Agent Guide
+# 项目规则
 
-Keep this file short. Project facts belong in `.context/`; repeatable procedures belong in Skills.
+这个仓库只做一件事：用代码做观众愿意看完的视频。当前作品是《喂》。
 
-## Start here
+开工先读 `.context/CURRENT.md`，涉及口味判断时读 `.context/FEEDBACK.md`。
 
-Before material work:
+## 目录
 
-1. Read `.context/CURRENT.md` for the current state and next action.
-2. Read `.context/PROJECT.md` for durable scope and architecture.
-3. Read `.context/REQUIREMENTS.md` or `.context/DECISIONS.md` only when relevant.
-4. Compare written context with the current branch, HEAD, worktree, code, and tests.
-5. Use `project-bootstrap` when context is missing, stale, or contradictory.
-6. Use `project-resume` after interruption and `project-handoff` before pausing material work.
+- `作品/<片名>/`：一件作品一个文件夹，放史实、节拍表、代码和成片。
+- `参考/`：别人的仓库和看片分析。做片前必须真的读过、看过。
+- `工具/`：至少两件作品用得上的脚本。一次性脚本留在作品文件夹。
+- `私密/`：含私人想法，不进 Git，不外传。
+- `_archive/`：旧秩序的全部内容。它不是规则，也不是现状。只有本人要求时才去翻；要用的东西提取回来，并重新验证。
 
-## Evidence and safety
+根目录不放新文件。不新建 `docs/`、`实验室/`、工作台或流水线。
 
-- Prefer current code and observed behavior, then tests/configuration, accepted decisions, current context, Git history, old plans, and inference.
-- Label consequential uncertainty as `[VERIFIED]`, `[DOCUMENTED]`, `[INFERRED]`, `[CONFLICT]`, `[STALE]`, or `[UNKNOWN]`.
-- Preserve uncommitted changes and begin reconnaissance read-only.
-- Do not expose secrets or start live services merely to understand the repository.
-- Run the narrowest relevant checks and state what was not checked.
+## 做片
 
-## Context maintenance
+1. 先找内容：要有多个真实维度，能撑住时长。一个观点拉长不算内容。
+2. 先核事实：查不到就换内容，不编数字。
+3. 先交节拍表和样张，本人确认后才分章制作，并分章验收。
+4. 一件作品一套版式；要有贯穿主角，开头设问，结尾解开。
+5. 画面用代码算出来，每拍都有变化。生成图和模型视频只在确有必要时用。
+6. 成品标准：关掉声音、不读说明，也能看懂正在发生什么；能直接发到平台。
+7. 技术通过不等于好看。渲染通过后要连续看片，只看抽帧判断不了节奏。
 
-- Keep `.context/CURRENT.md` as the one-minute resume point.
-- Update requirements and decisions only when their durable status changes.
-- Store sanitized conversation history under `history/` only when needed for intent or continuity.
+## 不要做
+
+- 一张图动来动去的 PPT 式视频。
+- 粒子爆炸、光晕、RGB 分离、镜头抖动、字体旋转这类廉价特效。
+- 字出画、文字和背景割裂、对话框和画面不是一个风格。
+- 装深沉的句子。深度靠证据，不靠腔调。
+- 把生成的意外结果说成更好。好不好由本人判断。
+
+## 上下文
+
+- 这份文件不超过 60 行。新增规则必须来自本人说过的话或反复出现的问题，同时删掉过时的规则。
+- `CURRENT.md` 不超过 40 行，直接覆盖改写，不追加快照，不写额度、进程和巡检流水。
+- `FEEDBACK.md` 记本人的原话，只增不改。
+- 代码和文件比文档可信。文档和现状冲突时先修文档。
+
+## 边界
+
+- 提交、推送、发布、花钱、对外发送，先问本人。
+- 仓库是公开的，不用 `git add .`，只添加确认过的路径。
+- 工作区可以保持未提交状态，不用 `git clean`、`git reset --hard`。
+- 密钥只从环境变量读，不写入文件，不打印。
+- 发布时按平台要求标明 AI 生成。
+- 不整段搬外部的脚本、画面、音乐和声音。第三方库的许可在商用前要重新判断。

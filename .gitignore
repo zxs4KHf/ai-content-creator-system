@@ -1,8 +1,22 @@
-# Recovery artifacts and local history
-_backup_v1/
+# 本地归档、私密资料、第三方仓库
+_archive/
+私密/
+参考/vendor/
+参考/声音试听/
 .context/LOCAL.md
+.context/FEEDBACK.md
 history/*
 !history/README.md
+
+# 作品的媒体和中间产物只留本机，发布后再决定是否入库
+作品/**/*.mp4
+作品/**/*.mov
+作品/**/*.wav
+作品/**/*.mp3
+作品/**/*.png
+作品/**/*.jpg
+作品/**/frames/
+作品/**/stills/
 
 # Secrets and local environments
 .env
@@ -10,6 +24,17 @@ history/*
 !.env.example
 .venv/
 venv/
+.tools/
+
+# Reproducible media intermediates (keep locally; commit manifests, narration,
+# subtitles, source images, approved covers, and final deliverables only)
+**/素材/audio/[0-9][0-9].mp3
+**/素材/audio/[0-9][0-9].srt
+**/素材/audio/_*.mp3
+**/素材/audio/_concat.txt
+**/素材/audio/voice_ab/
+**/素材/video/preview*.mp4
+**/素材/video/*_concat.txt
 
 # Python caches and build artifacts
 __pycache__/
@@ -31,3 +56,6 @@ desktop.ini
 *.temp
 *.log
 ~$*
+
+# 字体体积大，按需下载（均为 OFL）
+工具/fonts/
