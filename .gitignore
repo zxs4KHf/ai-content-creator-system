@@ -1,8 +1,22 @@
-# Recovery artifacts and local history
-_backup_v1/
+# 本地归档、私密资料、第三方仓库
+_archive/
+私密/
+参考/vendor/
+参考/声音试听/
 .context/LOCAL.md
+.context/FEEDBACK.md
 history/*
 !history/README.md
+
+# 作品的媒体和中间产物只留本机，发布后再决定是否入库
+作品/**/*.mp4
+作品/**/*.mov
+作品/**/*.wav
+作品/**/*.mp3
+作品/**/*.png
+作品/**/*.jpg
+作品/**/frames/
+作品/**/stills/
 
 # Secrets and local environments
 .env
@@ -42,3 +56,6 @@ desktop.ini
 *.temp
 *.log
 ~$*
+
+# 字体体积大，按需下载（均为 OFL）
+工具/fonts/

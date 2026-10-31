@@ -1,4 +1,0 @@
-interface:
-  display_name: "自媒体矩阵实验"
-  short_description: "设计可归因的账号栏目实验，核对样本覆盖并把数据结论写回工作流"
-  default_prompt: "Use $zimeiti-matrix to design and review the next controlled content experiment."
