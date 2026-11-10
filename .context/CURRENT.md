@@ -1,41 +1,24 @@
-# Current State
+# 当前
 
-- Last verified: 2026-07-27
-- Branch: `main`, tracking `origin/main`
-- Commit: `1fa1ab6` (recovered v2 baseline; context synchronization follows it)
-- Worktree: clean after the recovered baseline; `_backup_v1/` is retained locally and ignored by Git
-- Current phase: baseline secured in a private GitHub repository; awaiting G1/G2 human review
+- 仓库已于 2026-10-31 重建，2026-11-10 再次整理。旧文件留在本机 `_archive/`，不进 Git。
+- 分支：`review/last-librarian-g1-g2`，准备开 PR 合进 main（本人已同意，提交清单待确认）。勿用 reset --hard。
 
-## Working
+## 状态：视频全部暂停（2026-11-10）
 
-- [VERIFIED] The incoming tar archive is readable and its 43-file index matches the 43 recovered project files by count.
-- [VERIFIED] Relative to `_backup_v1`, v2 adds 35 files, changes 8 files, deletes none, and contains no Git conflict markers.
-- [VERIFIED] All five Python tools parse under Python 3.12 and all five CLI `--help` paths exit successfully.
-- [DOCUMENTED] The v2 workflow, knowledge base, six Claude skills, templates, and first story package have been created.
-- [VERIFIED] Private repository `zxs4KHf/ai-content-creator-system` exists, with local `main` tracking `origin/main`.
+- 本人当前优先 X 日更和贴纸，那部分已迁出本仓库：`D:\vibecoding\X运营\README.md`。本仓库只放视频。
 
-## Broken, blocked, or uncertain
+## 《喂》：暂停（2026-11-08）
 
-- [VERIFIED] `ffmpeg` and `ffprobe` are not available on the current PATH.
-- [UNKNOWN] External API, TTS, video-rendering, Jianying, and publishing paths have not been exercised end to end on this machine.
-- [DOCUMENTED] `02_制作中/2026-07-26_故事线_最后一位图书管理员/04_评审单.md` is waiting for G1 and G2 human decisions; no source images or G3 artifact exist.
-- [DOCUMENTED] Several platform limits in `91_知识库/K2_平台规格手册.md` remain marked for manual verification.
+- 位置：`作品/喂/`。片长 3:00；成片 `喂_v2.mp4`（无声版 `喂_无声.mp4`），混音脚本 `mix.sh`。
+- 主线：人和人打电话 → 片尾「对面，还是人吗」。
+- 入口 `render.html`，3D 样张 `立体.html`、涌现样张 `涌现.html`、早期样张 `样张.html`；截帧用 `工具/capture.mjs`。
+- 已知：`chapters.js`、`s3d.js`、`数据/`和`音频/`里的脚本与 JSON 从未提交，Git 里的版本跑不起来。本人决定暂停期间不处理。
+- 恢复条件：本人明确重启。
 
-## Verification performed
+## 《再向前》：暂停（2026-11-10）
 
-- Confirmed that the recovered target originally contained no Git metadata before repository initialization.
-- Compared SHA-256 hashes for the eight v1 files against v2; all eight changed, 35 files were added, and none were removed.
-- Checked archive readability, recovered-file count, and absence of conflict markers.
-- Parsed all five Python files with `ast.parse` under Python 3.12.13.
-- Ran `--help` for all five Python CLIs with bytecode generation disabled.
-- Did not install dependencies, call external APIs, generate media, log in to platforms, publish content, or run a full video pipeline.
+- 位置：`作品/再向前-BLG纪录片/`。本人看完样片后暂停："这版没有表达出来我想要的东西，如果blg夺冠我们再好好做一个"。
+- 恢复条件：BLG 夺冠且本人明确重启。重启先读 `作品/再向前-BLG纪录片/docs/STATUS.md`，先问清本人想要什么，不要沿用结构 V2.1。
+- 分工：主控/总导演用 Opus 5.5（不用 Fable 5.2）；下载和查资料派给 Antigravity 或 Sonnet 子代理，剪辑工程派给 Opus 子代理；主会话做导演判断和验收。
 
-## Next three actions
-
-1. Have the operator review and record G1/G2 decisions in the story review form.
-2. Create a development branch for any requested content or tooling changes; keep `main` as the reviewed baseline.
-3. Create isolated fixture-based smoke tests, install ffmpeg, and verify dry-run/TTS/subtitle/video paths before G3.
-
-## Resume from here
-
-Open `02_制作中/2026-07-26_故事线_最后一位图书管理员/04_评审单.md`, record the operator's G1/G2 decision, then create a development branch before applying any requested changes.
+本机信息见 `.context/LOCAL.md`，原话见 `.context/FEEDBACK.md`，决策见 `.context/DECISIONS.md`。
