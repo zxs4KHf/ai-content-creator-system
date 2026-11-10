@@ -59,3 +59,8 @@ desktop.ini
 
 # 字体体积大，按需下载（均为 OFL）
 工具/fonts/
+作品/**/*.m4a
+作品/**/vendor/
+
+# 本人的编辑器工作区文件
+*.code-workspace
